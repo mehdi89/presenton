@@ -1,0 +1,41 @@
+@use "./icon/style.scss";
+
+@use "./utils/pagination";
+@use "./utils/select";
+@use "./utils/scroll";
+@use "./utils/loading";
+
+.authTestimonialCarousel {
+  .testimonialCarouselIndicatorContainer {
+    text-align: left !important;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 20px;
+    .testimonialCarouselIndicator {
+      width: 90px;
+      background-color: #c4c4c4;
+      border-radius: 6px;
+      height: 6px;
+      svg {
+        display: none !important;
+      }
+      &.testimonialCarouselIndicatorActive {
+        background-color: #ffffff;
+      }
+    }
+  }
+}
+
+@media (min-width: 1500px) {
+  .auth-layout {
+    @apply m-auto max-h-[1000px] w-[1440px] overflow-hidden;
+  }
+}
+
+.auth-slider {
+  opacity: 0.9;
+  .slick-dots.slick-dots-bottom {
+    @apply -bottom-5;
+  }
+}

@@ -742,17 +742,15 @@ async def generate_presentation_handler(
         await sql_session.commit()
 
         if async_status:
-            async_status.message = "Exporting presentation"
+            async_status.message = "Completing presentation"
             async_status.updated_at = datetime.now()
             sql_session.add(async_status)
 
-        # 9. Export
-        presentation_and_path = await export_presentation(
-            presentation_id, presentation.title or str(uuid.uuid4()), request.export_as
-        )
-
+        # 9. Return presentation ID and edit path (skip export for now)
+        # Export can be done later via the /export endpoint if needed
         response = PresentationPathAndEditPath(
-            **presentation_and_path.model_dump(),
+            presentation_id=presentation_id,
+            path="",  # Empty path - export can be done later
             edit_path=f"/presentation?id={presentation_id}",
         )
 

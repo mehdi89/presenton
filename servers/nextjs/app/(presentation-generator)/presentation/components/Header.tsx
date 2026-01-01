@@ -20,23 +20,18 @@ import { PresentationGenerationApi } from "../../services/api/presentation-gener
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { useDispatch, useSelector } from "react-redux";
 
-import Link from "next/link";
-
 import { RootState } from "@/store/store";
 import { toast } from "sonner";
 
 
 import Announcement from "@/components/Announcement";
 import { PptxPresentationModel } from "@/types/pptx_models";
-import HeaderNav from "../../components/HeaderNab";
 import PDFIMAGE from "@/public/pdf.svg";
 import PPTXIMAGE from "@/public/pptx.svg";
 import Image from "next/image";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
-import { clearPresentationData } from "@/store/slices/presentationGeneration";
-import { clearHistory } from "@/store/slices/undoRedoSlice";
 
 const Header = ({
   presentation_id,
@@ -135,12 +130,6 @@ const Header = ({
       setShowLoader(false);
     }
   };
-  const handleReGenerate = () => {
-    dispatch(clearPresentationData());
-    dispatch(clearHistory())
-    trackEvent(MixpanelEvent.Header_ReGenerate_Button_Clicked, { pathname });
-    router.push(`/presentation?id=${presentation_id}&stream=true`);
-  };
   const downloadLink = (path: string) => {
     // if we have popup access give direct download if not redirect to the path
     if (window.opener) {
@@ -162,7 +151,7 @@ const Header = ({
           handleExportPdf();
         }}
         variant="ghost"
-        className={`pb-4 border-b rounded-none border-gray-300 w-full flex justify-start text-[#5146E5] ${mobile ? "bg-white py-6 border-none rounded-lg" : ""}`} >
+        className={`pb-4 border-b rounded-none border-gray-300 w-full flex justify-start text-[#2299DD] ${mobile ? "bg-white py-6 border-none rounded-lg" : ""}`} >
         <Image src={PDFIMAGE} alt="pdf export" width={30} height={30} />
         Export as PDF
       </Button>
@@ -172,7 +161,7 @@ const Header = ({
           handleExportPptx();
         }}
         variant="ghost"
-        className={`w-full flex justify-start text-[#5146E5] ${mobile ? "bg-white py-6" : ""}`}
+        className={`w-full flex justify-start text-[#2299DD] ${mobile ? "bg-white py-6" : ""}`}
       >
         <Image src={PPTXIMAGE} alt="pptx export" width={30} height={30} />
         Export as PPTX
@@ -185,13 +174,9 @@ const Header = ({
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
     <div className="flex flex-col lg:flex-row items-center gap-4">
       {/* undo redo */}
-      <button onClick={handleReGenerate} disabled={isStreaming || !presentationData} className="text-white  disabled:opacity-50" >
-
-        Re-Generate
-      </button>
       <div className="flex items-center gap-2 ">
         <ToolTip content="Undo">
-          <button disabled={!canUndo} className="text-white disabled:opacity-50" onClick={() => {
+          <button disabled={!canUndo} className="text-gray-700 disabled:opacity-50 hover:text-[#2299DD]" onClick={() => {
             onUndo();
           }}>
 
@@ -201,7 +186,7 @@ const Header = ({
         </ToolTip>
         <ToolTip content="Redo">
 
-          <button disabled={!canRedo} className="text-white disabled:opacity-50" onClick={() => {
+          <button disabled={!canRedo} className="text-gray-700 disabled:opacity-50 hover:text-[#2299DD]" onClick={() => {
             onRedo();
           }}>
             <Redo2 className="w-6 h-6 " />
@@ -219,9 +204,9 @@ const Header = ({
           router.push(to);
         }}
         variant="ghost"
-        className="border border-white font-bold text-white rounded-[32px] transition-all duration-300 group"
+        className="border border-gray-300 font-bold text-gray-700 rounded-[32px] transition-all duration-300 hover:bg-gray-100 group"
       >
-        <Play className="w-4 h-4 mr-1 stroke-white group-hover:stroke-black" />
+        <Play className="w-4 h-4 mr-1" />
         Present
       </Button>
 
@@ -232,7 +217,7 @@ const Header = ({
       }} className="hidden lg:block relative ">
         <Popover open={open} onOpenChange={setOpen} >
           <PopoverTrigger asChild>
-            <Button className={`border py-5 text-[#5146E5] font-bold rounded-[32px] transition-all duration-500 hover:border hover:bg-[#5146E5] hover:text-white w-full ${mobile ? "" : "bg-white"}`}>
+            <Button className={`border border-gray-300 py-5 text-gray-700 font-bold rounded-[32px] transition-all duration-500 hover:bg-[#2299DD] hover:text-white hover:border-[#2299DD] w-full ${mobile ? "" : "bg-white"}`}>
               <SquareArrowOutUpRight className="w-4 h-4 mr-1" />
               Export
             </Button>
@@ -260,33 +245,28 @@ const Header = ({
       />
       <div
 
-        className="bg-[#5146E5] w-full shadow-lg sticky top-0 ">
+        className="bg-white w-full shadow-lg sticky top-0 border-b border-gray-200">
 
         <Announcement />
-        <Wrapper className="flex items-center justify-between py-1">
-          <Link href="/dashboard" className="min-w-[162px]">
-            <img
-              className="h-16"
-              src="/logo-white.png"
-              alt="Presentation logo"
-            />
-          </Link>
+        <Wrapper className="flex items-center justify-between py-3">
+          <div className="flex items-center gap-2">
+            <i className="tubeOnAI-logo text-2xl text-[#2299DD]" />
+            <i className="tubeOnAI-brand-logo text-2xl text-gray-800" />
+          </div>
 
           {/* Desktop Menu */}
           <div className="hidden lg:flex items-center gap-4 2xl:gap-6">
             {isStreaming && (
-              <Loader2 className="animate-spin text-white font-bold w-6 h-6" />
+              <Loader2 className="animate-spin text-[#2299DD] font-bold w-6 h-6" />
             )}
 
 
             <MenuItems mobile={false} />
-            <HeaderNav />
           </div>
 
           {/* Mobile Menu */}
           <div className="lg:hidden flex items-center gap-4">
-            <HeaderNav />
-
+            <MenuItems mobile={true} />
           </div>
         </Wrapper>
 

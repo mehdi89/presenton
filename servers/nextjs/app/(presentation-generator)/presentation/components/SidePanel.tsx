@@ -141,7 +141,7 @@ const SidePanel = ({
           <ToolTip content="Show Panel">
             <Button
               onClick={() => setIsMobilePanelOpen(true)}
-              className="bg-[#5146E5] text-white p-3 rounded-full shadow-lg"
+              className="bg-[#2299DD] text-white p-3 rounded-full shadow-lg"
             >
               <PanelRightOpen className="text-white" size={20} />
             </Button>
@@ -172,7 +172,7 @@ const SidePanel = ({
                 <ToolTip content="Image Preview">
                   <Button
                     className={`${active === "grid"
-                      ? "bg-[#5141e5] hover:bg-[#4638c7]"
+                      ? "bg-[#2299DD] hover:bg-[#1a7ab8]"
                       : "bg-white hover:bg-white"
                       }`}
                     onClick={() => {
@@ -191,7 +191,7 @@ const SidePanel = ({
                 <ToolTip content="List Preview">
                   <Button
                     className={`${active === "list"
-                      ? "bg-[#5141e5] hover:bg-[#4638c7]"
+                      ? "bg-[#2299DD] hover:bg-[#1a7ab8]"
                       : "bg-white hover:bg-white"
                       }`}
                     onClick={() => {
@@ -273,7 +273,7 @@ const SidePanel = ({
                     <div
                       key={`${slide.id}-${index}`}
                       onClick={() => onSlideClick(index)}
-                      className={` cursor-pointer ring-2 p-1  rounded-md transition-all duration-200 ${selectedSlide === index ? ' ring-[#5141e5]' : 'ring-gray-200'
+                      className={` cursor-pointer ring-2 p-1  rounded-md transition-all duration-200 ${selectedSlide === index ? ' ring-[#2299DD]' : 'ring-gray-200'
                         }`}
                     >
                       <div className=" bg-white pointer-events-none  relative overflow-hidden aspect-video">
