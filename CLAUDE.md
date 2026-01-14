@@ -48,6 +48,7 @@ Presenton is an AI-powered presentation generation service. It uses OpenAI for c
 | `DATABASE_URL` | PostgreSQL connection string (stored in GitHub secrets) |
 | `CAN_CHANGE_KEYS` | Allow runtime API key changes (`false`) |
 | `DISABLE_ANONYMOUS_TRACKING` | Disable analytics (`true`) |
+| `RESTRICT_TO_PRESENTATION_ONLY` | Restrict UI to only `/presentation` route (`true`/`false`, default: `false`) |
 
 ## GitHub Secrets
 
@@ -102,6 +103,26 @@ az containerapp update \
   --resource-group TubeOnAI \
   --set-env-vars "VAR_NAME=value"
 ```
+
+### Enable/Disable Route Restriction
+
+To restrict access to only the `/presentation` route:
+
+```bash
+# Enable restriction (only /presentation accessible)
+az containerapp update \
+  --name tubeonai-presenton \
+  --resource-group TubeOnAI \
+  --set-env-vars "RESTRICT_TO_PRESENTATION_ONLY=true"
+
+# Disable restriction (all routes accessible)
+az containerapp update \
+  --name tubeonai-presenton \
+  --resource-group TubeOnAI \
+  --set-env-vars "RESTRICT_TO_PRESENTATION_ONLY=false"
+```
+
+When enabled, all routes except `/presentation` will show a "Page Not Found" message.
 
 ### Scale Replicas
 
