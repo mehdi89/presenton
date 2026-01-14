@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     libreoffice \
     fontconfig \
-    chromium
+    chromium \
+    zstd
 
 
 # Install Node.js 20 using NodeSource repository
@@ -15,7 +16,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 
 
 # Create a working directory
-WORKDIR /app  
+WORKDIR /app
 
 # Set environment variables
 ENV APP_DATA_DIRECTORY=/app_data
