@@ -41,6 +41,7 @@ from utils.export_utils import export_presentation
 from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
+from utils.usage_tracker import UsageTracker
 
 from services.database import get_async_session
 from services.temp_file_service import TEMP_FILE_SERVICE
@@ -494,6 +495,9 @@ async def generate_presentation_handler(
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     try:
+        # Initialize usage tracker to record all token usage
+        usage_tracker = UsageTracker()
+
         using_slides_markdown = False
 
         if request.slides_markdown:
@@ -543,6 +547,7 @@ async def generate_presentation_handler(
                 request.instructions,
                 request.include_title_slide,
                 request.web_search,
+                usage_tracker,  # Pass usage tracker to record outline generation tokens
             ):
 
                 if isinstance(chunk, HTTPException):
@@ -695,6 +700,7 @@ async def generate_presentation_handler(
                     request.tone.value,
                     request.verbosity.value,
                     request.instructions,
+                    usage_tracker,  # Pass usage tracker to record slide generation tokens
                 )
                 for i in range(start, end)
             ]
@@ -735,6 +741,11 @@ async def generate_presentation_handler(
         for assets_list in generated_assets_list:
             generated_assets.extend(assets_list)
 
+        # Track image generation count for usage
+        for asset in generated_assets:
+            if hasattr(asset, 'type') and 'image' in str(asset.type).lower():
+                usage_tracker.add_usage(phase="image")
+
         # 8. Save PresentationModel and Slides
         sql_session.add(presentation)
         sql_session.add_all(slides)
@@ -746,13 +757,19 @@ async def generate_presentation_handler(
             async_status.updated_at = datetime.now()
             sql_session.add(async_status)
 
-        # 9. Return presentation ID and edit path (skip export for now)
-        # Export can be done later via the /export endpoint if needed
+        # 9. Return presentation ID and edit path with usage metadata
+        # Convert usage tracker to metadata
+        usage_metadata = usage_tracker.to_metadata()
+
         response = PresentationPathAndEditPath(
             presentation_id=presentation_id,
             path="",  # Empty path - export can be done later
             edit_path=f"/presentation?id={presentation_id}",
+            usage=usage_metadata,  # Include usage tracking data
         )
+
+        # Log usage for debugging
+        print(f"[Usage] Presentation generated with usage: {usage_metadata.model_dump()}")
 
         if async_status:
             async_status.message = "Presentation generation completed"

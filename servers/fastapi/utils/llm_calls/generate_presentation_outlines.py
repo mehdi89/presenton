@@ -92,6 +92,7 @@ async def generate_ppt_outline(
     instructions: Optional[str] = None,
     include_title_slide: bool = True,
     web_search: bool = False,
+    usage_tracker = None,  # Optional usage tracker to record token usage
 ):
     model = get_model()
     response_model = get_presentation_outline_model_with_n_slides(n_slides)
@@ -99,6 +100,9 @@ async def generate_ppt_outline(
     client = LLMClient()
 
     try:
+        # Track if we should estimate usage (for streaming calls)
+        accumulated_text = ""
+
         async for chunk in client.stream_structured(
             model,
             get_messages(
@@ -119,6 +123,23 @@ async def generate_ppt_outline(
                 else None
             ),
         ):
+            accumulated_text += chunk
             yield chunk
+
+        # Estimate usage from generated content if tracker provided
+        if usage_tracker:
+            # Estimate input tokens: content + context + prompt overhead
+            input_text = content + (additional_context or "") + (instructions or "")
+            estimated_input = usage_tracker.estimate_tokens(input_text) + 500  # +500 for system prompt
+
+            # Estimate output tokens from accumulated text
+            estimated_output = usage_tracker.estimate_tokens(accumulated_text)
+
+            usage_tracker.add_usage(
+                input_tokens=estimated_input,
+                output_tokens=estimated_output,
+                phase="outline"
+            )
+
     except Exception as e:
         yield handle_llm_client_exceptions(e)

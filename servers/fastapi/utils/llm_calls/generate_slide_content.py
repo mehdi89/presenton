@@ -105,6 +105,7 @@ async def get_slide_content_from_type_and_outline(
     tone: Optional[str] = None,
     verbosity: Optional[str] = None,
     instructions: Optional[str] = None,
+    usage_tracker = None,  # Optional usage tracker to record token usage
 ):
     client = LLMClient()
     model = get_model()
@@ -138,6 +139,24 @@ async def get_slide_content_from_type_and_outline(
             response_format=response_schema,
             strict=False,
         )
+
+        # Estimate usage if tracker provided
+        if usage_tracker:
+            # Estimate input: outline + system prompt + schema
+            input_text = outline.content + (instructions or "")
+            estimated_input = usage_tracker.estimate_tokens(input_text) + 400  # +400 for system prompt & schema
+
+            # Estimate output: generated slide content
+            import json
+            output_text = json.dumps(response)
+            estimated_output = usage_tracker.estimate_tokens(output_text)
+
+            usage_tracker.add_usage(
+                input_tokens=estimated_input,
+                output_tokens=estimated_output,
+                phase="slide"
+            )
+
         return response
 
     except Exception as e:
