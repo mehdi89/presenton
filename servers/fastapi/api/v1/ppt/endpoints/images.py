@@ -5,6 +5,7 @@ from sqlmodel import select
 
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
+from services.blob_storage_service import get_blob_storage_service
 from services.database import get_async_session
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_images_directory
@@ -53,13 +54,30 @@ async def upload_image(
     file: UploadFile = File(...), sql_session: AsyncSession = Depends(get_async_session)
 ):
     try:
+        blob_storage = get_blob_storage_service()
+        file_data = await file.read()
+
+        # Get file extension
+        extension = "png"
+        if file.filename and "." in file.filename:
+            extension = file.filename.rsplit(".", 1)[-1].lower()
+
+        # Upload to blob storage if configured
+        if blob_storage.is_enabled:
+            blob_url = blob_storage.upload_bytes(file_data, extension=extension)
+            image_asset = ImageAsset(path=blob_url, is_uploaded=True)
+            sql_session.add(image_asset)
+            await sql_session.commit()
+            return image_asset
+
+        # Otherwise save locally
         new_filename = get_file_name_with_random_uuid(file)
         image_path = os.path.join(
             get_images_directory(), os.path.basename(new_filename)
         )
 
         with open(image_path, "wb") as f:
-            f.write(await file.read())
+            f.write(file_data)
 
         image_asset = ImageAsset(path=image_path, is_uploaded=True)
 
@@ -96,7 +114,12 @@ async def delete_uploaded_image_by_id(
         if not image:
             raise HTTPException(status_code=404, detail="Image not found")
 
-        os.remove(image.path)
+        # Delete from blob storage or local filesystem
+        if image.path.startswith("http"):
+            blob_storage = get_blob_storage_service()
+            blob_storage.delete_blob(image.path)
+        elif os.path.exists(image.path):
+            os.remove(image.path)
 
         await sql_session.delete(image)
         await sql_session.commit()

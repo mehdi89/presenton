@@ -117,3 +117,12 @@ def get_dall_e_3_quality_env():
 # Gpt Image 1.5 Quality
 def get_gpt_image_1_5_quality_env():
     return os.getenv("GPT_IMAGE_1_5_QUALITY")
+
+
+# Azure Blob Storage
+def get_azure_storage_connection_string_env():
+    return os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+
+
+def get_azure_storage_container_env():
+    return os.getenv("AZURE_STORAGE_CONTAINER", "images")

@@ -37,6 +37,14 @@ Presenton is an AI-powered presentation generation service. It uses OpenAI for c
 - **Admin User**: `presenton_admin`
 - **Host**: presenton-db.postgres.database.azure.com
 
+### Blob Storage (Images)
+
+- **Storage Account**: `presentonimages`
+- **Container**: `images`
+- **Location**: East US
+- **Access**: Public blob access (images served directly via URL)
+- **URL Pattern**: `https://presentonimages.blob.core.windows.net/images/{uuid}.{ext}`
+
 ## Environment Variables
 
 | Variable | Description |
@@ -46,6 +54,7 @@ Presenton is an AI-powered presentation generation service. It uses OpenAI for c
 | `OPENAI_MODEL` | Model to use (`gpt-5-mini`) |
 | `IMAGE_PROVIDER` | Image generation provider (`dall-e-3`) |
 | `DATABASE_URL` | PostgreSQL connection string (stored in GitHub secrets) |
+| `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob Storage connection string for image persistence |
 | `CAN_CHANGE_KEYS` | Allow runtime API key changes (`false`) |
 | `DISABLE_ANONYMOUS_TRACKING` | Disable analytics (`true`) |
 | `RESTRICT_TO_PRESENTATION_ONLY` | Restrict UI to only `/presentation` route (`true`/`false`, default: `false`) |
@@ -61,6 +70,7 @@ The following secrets are configured in the GitHub repository:
 - `TUBEONAIPRESENTON_REGISTRY_PASSWORD` - ACR password
 - `OPENAI_API_KEY` - OpenAI API key
 - `DATABASE_URL` - PostgreSQL connection string
+- `AZURE_STORAGE_CONNECTION_STRING` - Azure Blob Storage connection string
 
 ## Deployment
 

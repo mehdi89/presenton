@@ -43,6 +43,6 @@ jobs:
           resourceGroup: TubeOnAI
           imageToBuild: tubeonaipresenton.azurecr.io/tubeonai-presenton:${{ github.sha }}
           targetPort: 80
-          environmentVariables: LLM=openai OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} OPENAI_MODEL=gpt-5-mini IMAGE_PROVIDER=dall-e-3 CAN_CHANGE_KEYS=false DISABLE_ANONYMOUS_TRACKING=true DATABASE_URL=${{ secrets.DATABASE_URL }}
+          environmentVariables: LLM=openai OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} OPENAI_MODEL=gpt-5-mini IMAGE_PROVIDER=dall-e-3 CAN_CHANGE_KEYS=false DISABLE_ANONYMOUS_TRACKING=true DATABASE_URL=${{ secrets.DATABASE_URL }} AZURE_STORAGE_CONNECTION_STRING=${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
 
 

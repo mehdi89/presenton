@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import io
 import json
 import os
 import aiohttp
@@ -8,6 +9,7 @@ from google import genai
 from openai import NOT_GIVEN, AsyncOpenAI
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
+from services.blob_storage_service import get_blob_storage_service
 from utils.get_env import (
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
@@ -34,6 +36,7 @@ class ImageGenerationService:
         self.output_directory = output_directory
         self.is_image_generation_disabled = is_image_generation_disabled()
         self.image_gen_func = self.get_image_gen_func()
+        self.blob_storage = get_blob_storage_service()
 
     def get_image_gen_func(self):
         if self.is_image_generation_disabled:
@@ -65,6 +68,7 @@ class ImageGenerationService:
         - If the stock provider is selected, it uses the prompt directly,
         otherwise it uses the full image prompt with theme.
         - Output Directory is used for saving the generated image not the stock provider.
+        - If Azure Blob Storage is configured, images are uploaded there and URLs returned.
         """
         if self.is_image_generation_disabled:
             print("Image generation is disabled. Using placeholder image.")
@@ -87,8 +91,10 @@ class ImageGenerationService:
                     image_prompt, self.output_directory
                 )
             if image_path:
+                # Blob URLs and stock provider URLs are returned directly
                 if image_path.startswith("http"):
                     return image_path
+                # Local file paths are wrapped in ImageAsset for database tracking
                 elif os.path.exists(image_path):
                     return ImageAsset(
                         path=image_path,
@@ -116,9 +122,17 @@ class ImageGenerationService:
             response_format="b64_json" if model == "dall-e-3" else NOT_GIVEN,
             size="1024x1024",
         )
+        image_data = base64.b64decode(result.data[0].b64_json)
+
+        # Upload to blob storage if configured, otherwise save locally
+        if self.blob_storage.is_enabled:
+            blob_url = self.blob_storage.upload_bytes(image_data, extension="png")
+            print(f"Uploaded image to blob storage: {blob_url}")
+            return blob_url
+
         image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
         with open(image_path, "wb") as f:
-            f.write(base64.b64decode(result.data[0].b64_json))
+            f.write(image_data)
         return image_path
 
     async def generate_image_openai_dalle3(
@@ -156,6 +170,20 @@ class ImageGenerationService:
         for part in response.candidates[0].content.parts:
             if part.inline_data is not None:
                 image = part.as_image()
+
+                # Upload to blob storage if configured
+                if self.blob_storage.is_enabled:
+                    # Save to bytes buffer first
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="JPEG")
+                    buffer.seek(0)
+                    blob_url = self.blob_storage.upload_bytes(
+                        buffer.read(), extension="jpg"
+                    )
+                    print(f"Uploaded image to blob storage: {blob_url}")
+                    return blob_url
+
+                # Otherwise save locally
                 image_path = os.path.join(output_directory, f"{uuid.uuid4()}.jpg")
                 image.save(image_path)
 
@@ -400,6 +428,16 @@ class ImageGenerationService:
 
                         # Determine extension
                         ext = filename.split(".")[-1] if "." in filename else "png"
+
+                        # Upload to blob storage if configured
+                        if self.blob_storage.is_enabled:
+                            blob_url = self.blob_storage.upload_bytes(
+                                image_data, extension=ext
+                            )
+                            print(f"Uploaded ComfyUI image to blob storage: {blob_url}")
+                            return blob_url
+
+                        # Otherwise save locally
                         image_path = os.path.join(
                             output_directory, f"{uuid.uuid4()}.{ext}"
                         )
