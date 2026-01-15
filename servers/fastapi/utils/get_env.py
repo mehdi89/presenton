@@ -126,3 +126,45 @@ def get_azure_storage_connection_string_env():
 
 def get_azure_storage_container_env():
     return os.getenv("AZURE_STORAGE_CONTAINER", "images")
+
+
+# Azure OpenAI
+def get_azure_openai_api_key_env():
+    return os.getenv("AZURE_OPENAI_API_KEY")
+
+
+def get_azure_openai_endpoint_env():
+    return os.getenv("AZURE_OPENAI_ENDPOINT")
+
+
+def get_azure_openai_deployment_name_env():
+    return os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+
+
+def get_azure_openai_api_version_env():
+    return os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
+
+
+def get_azure_model_env():
+    return os.getenv("AZURE_MODEL")
+
+
+# Azure FLUX
+def get_azure_flux_api_key_env():
+    return os.getenv("AZURE_FLUX_API_KEY")
+
+
+def get_azure_flux_endpoint_env():
+    return os.getenv("AZURE_FLUX_ENDPOINT")
+
+
+def get_azure_flux_deployment_name_env():
+    return os.getenv("AZURE_FLUX_DEPLOYMENT_NAME")
+
+
+def get_azure_flux_api_version_env():
+    return os.getenv("AZURE_FLUX_API_VERSION", "2024-02-15-preview")
+
+
+def get_azure_flux_model_env():
+    return os.getenv("AZURE_FLUX_MODEL")

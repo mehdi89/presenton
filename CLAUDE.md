@@ -47,12 +47,59 @@ Presenton is an AI-powered presentation generation service. It uses OpenAI for c
 
 ## Environment Variables
 
+### LLM Provider Configuration
+
 | Variable | Description |
 |----------|-------------|
-| `LLM` | LLM provider (`openai`) |
+| `LLM` | LLM provider: `openai`, `azure`, `anthropic`, `google`, `ollama`, or `custom` |
 | `OPENAI_API_KEY` | OpenAI API key (stored in GitHub secrets) |
 | `OPENAI_MODEL` | Model to use (`gpt-5-mini`) |
-| `IMAGE_PROVIDER` | Image generation provider (`dall-e-3`) |
+| `IMAGE_PROVIDER` | Image generation provider: `dall-e-3`, `azure-dall-e`, `azure-flux`, `pexels`, etc. |
+
+### Azure OpenAI Configuration
+
+When using `LLM=azure`, configure these environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | `350b41a4e7fe42a9bf3e6510a79912b3` |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL | `https://tubeonai-east-us-2-new.openai.azure.com` |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | Deployment name for the model | `gpt-5-mini`, `claude-sonnet-4-5`, `grok-3`, etc. |
+| `AZURE_OPENAI_API_VERSION` | API version (optional) | `2025-01-01-preview` (default: `2024-08-01-preview`) |
+| `AZURE_MODEL` | Model identifier | Same as deployment name |
+
+**Supported Azure-hosted models:**
+- **OpenAI models**: `gpt-4o`, `gpt-5-mini`, `gpt-4-turbo`, etc.
+- **Anthropic Claude**: `claude-sonnet-4-5`, `claude-haiku-4-5`, `claude-opus-4-5`
+- **xAI Grok**: `grok-3`, `grok-2`
+- **DeepSeek**: `deepseek-v3`, `deepseek-chat`
+- **DALL-E**: `dall-e-3`, `dall-e-2` (for image generation with `IMAGE_PROVIDER=azure-dall-e`)
+
+The system automatically detects the model type and routes requests to the appropriate API format (Anthropic API for Claude, OpenAI-compatible API for others).
+
+### Azure FLUX Image Generation Configuration
+
+When using `IMAGE_PROVIDER=azure-flux`, configure these environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `AZURE_FLUX_API_KEY` | Azure API key for FLUX deployment | `350b41a4e7fe42a9bf3e6510a79912b3` |
+| `AZURE_FLUX_ENDPOINT` | Azure OpenAI endpoint URL | `https://TubeOnAI-East-US-2-NEW.openai.azure.com` |
+| `AZURE_FLUX_DEPLOYMENT_NAME` | FLUX deployment name | `FLUX-1.1-pro` |
+| `AZURE_FLUX_MODEL` | FLUX model identifier | `FLUX-1.1-pro` |
+| `AZURE_FLUX_API_VERSION` | API version (optional) | `2024-02-15-preview` (default) |
+
+**Azure FLUX Features:**
+- High-quality image generation using FLUX-1.1-pro model
+- Supports 1024x1024 image size
+- Returns images in PNG format via base64 encoding
+- Automatically uploads to Azure Blob Storage if configured
+- Fallback to local file storage if blob storage not available
+
+### Other Configuration
+
+| Variable | Description |
+|----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string (stored in GitHub secrets) |
 | `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob Storage connection string for image persistence |
 | `CAN_CHANGE_KEYS` | Allow runtime API key changes (`false`) |
