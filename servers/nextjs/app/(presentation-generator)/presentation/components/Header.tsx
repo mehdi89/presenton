@@ -212,17 +212,15 @@ const Header = ({
 
       {/* Desktop Export Button with Popover */}
 
-      <div style={{
-        zIndex: 100
-      }} className="hidden lg:block relative ">
-        <Popover open={open} onOpenChange={setOpen} >
+      <div className="hidden lg:block relative">
+        <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button className={`border border-gray-300 py-5 text-gray-700 font-bold rounded-[32px] transition-all duration-500 hover:bg-[#2299DD] hover:text-white hover:border-[#2299DD] w-full ${mobile ? "" : "bg-white"}`}>
               <SquareArrowOutUpRight className="w-4 h-4 mr-1" />
               Export
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 ">
+          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 z-[9999]">
             <ExportOptions mobile={false} />
           </PopoverContent>
         </Popover>
