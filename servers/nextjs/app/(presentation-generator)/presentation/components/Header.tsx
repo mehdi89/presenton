@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import {
-  SquareArrowOutUpRight,
+  Download,
   Play,
   Loader2,
   Redo2,
@@ -11,11 +11,6 @@ import {
 import React, { useState } from "react";
 import Wrapper from "@/components/Wrapper";
 import { useRouter, usePathname } from "next/navigation";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { useDispatch, useSelector } from "react-redux";
@@ -26,9 +21,6 @@ import { toast } from "sonner";
 
 import Announcement from "@/components/Announcement";
 import { PptxPresentationModel } from "@/types/pptx_models";
-import PDFIMAGE from "@/public/pdf.svg";
-import PPTXIMAGE from "@/public/pptx.svg";
-import Image from "next/image";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
@@ -40,7 +32,6 @@ const Header = ({
   presentation_id: string;
   currentSlide?: number;
 }) => {
-  const [open, setOpen] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -63,7 +54,6 @@ const Header = ({
     if (isStreaming) return;
 
     try {
-      setOpen(false);
       setShowLoader(true);
       // Save the presentation data before exporting
       trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
@@ -97,7 +87,6 @@ const Header = ({
     if (isStreaming) return;
 
     try {
-      setOpen(false);
       setShowLoader(true);
       // Save the presentation data before exporting
       trackEvent(MixpanelEvent.Header_UpdatePresentationContent_API_Call);
@@ -143,34 +132,6 @@ const Header = ({
     }
   };
 
-  const ExportOptions = ({ mobile }: { mobile: boolean }) => (
-    <div className={`space-y-2 ${mobile ? "" : "bg-white"} rounded-lg`}>
-      <Button
-        onClick={() => {
-          trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname });
-          handleExportPdf();
-        }}
-        variant="ghost"
-        className={`pb-4 border-b rounded-none border-gray-300 w-full flex justify-start text-[#2299DD] ${mobile ? "bg-white py-6 border-none rounded-lg" : ""}`} >
-        <Image src={PDFIMAGE} alt="pdf export" width={30} height={30} />
-        Export as PDF
-      </Button>
-      <Button
-        onClick={() => {
-          trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname });
-          handleExportPptx();
-        }}
-        variant="ghost"
-        className={`w-full flex justify-start text-[#2299DD] ${mobile ? "bg-white py-6" : ""}`}
-      >
-        <Image src={PPTXIMAGE} alt="pptx export" width={30} height={30} />
-        Export as PPTX
-      </Button>
-
-
-    </div>
-  );
-
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
     <div className="flex items-center gap-2 lg:gap-4">
       {/* undo redo */}
@@ -210,20 +171,35 @@ const Header = ({
         Present
       </Button>
 
-      {/* Export Button with Popover */}
-      <div className="relative">
-        <Popover open={open} onOpenChange={setOpen}>
-          <PopoverTrigger asChild>
-            <Button className={`border border-gray-300 py-5 text-gray-700 font-bold rounded-[32px] transition-all duration-500 hover:bg-[#2299DD] hover:text-white hover:border-[#2299DD] bg-white`}>
-              <SquareArrowOutUpRight className="w-4 h-4 mr-1" />
-              Export
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 z-[100]">
-            <ExportOptions mobile={false} />
-          </PopoverContent>
-        </Popover>
-      </div>
+      {/* PDF Export Button */}
+      <ToolTip content="Export as PDF">
+        <Button
+          onClick={() => {
+            trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname });
+            handleExportPdf();
+          }}
+          variant="ghost"
+          className="border border-gray-300 font-bold text-gray-700 rounded-[32px] transition-all duration-300 hover:bg-[#2299DD] hover:text-white hover:border-[#2299DD]"
+        >
+          <Download className="w-4 h-4 mr-1" />
+          <span className="hidden sm:inline">PDF</span>
+        </Button>
+      </ToolTip>
+
+      {/* PPTX Export Button */}
+      <ToolTip content="Export as PPTX">
+        <Button
+          onClick={() => {
+            trackEvent(MixpanelEvent.Header_Export_PPTX_Button_Clicked, { pathname });
+            handleExportPptx();
+          }}
+          variant="ghost"
+          className="border border-gray-300 font-bold text-gray-700 rounded-[32px] transition-all duration-300 hover:bg-[#2299DD] hover:text-white hover:border-[#2299DD]"
+        >
+          <Download className="w-4 h-4 mr-1" />
+          <span className="hidden sm:inline">PPTX</span>
+        </Button>
+      </ToolTip>
     </div>
   );
 
