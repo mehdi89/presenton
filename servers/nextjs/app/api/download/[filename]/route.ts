@@ -47,7 +47,8 @@ export async function GET(
       : "application/octet-stream";
 
     // Return file with appropriate headers for download
-    return new NextResponse(fileBuffer, {
+    // Convert Buffer to Uint8Array for NextResponse
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": contentType,
         "Content-Disposition": `attachment; filename="${filename}"`,
