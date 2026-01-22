@@ -51,7 +51,7 @@ Presenton is an AI-powered presentation generation service. It uses OpenAI for c
 |----------|-------------|
 | `LLM` | LLM provider (`openai`) |
 | `OPENAI_API_KEY` | OpenAI API key (stored in GitHub secrets) |
-| `OPENAI_MODEL` | Model to use (`gpt-5-mini`) |
+| `OPENAI_MODEL` | Model to use (`gpt-5.2`) |
 | `IMAGE_PROVIDER` | Image generation provider (`dall-e-3`) |
 | `DATABASE_URL` | PostgreSQL connection string (stored in GitHub secrets) |
 | `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob Storage connection string for image persistence |
