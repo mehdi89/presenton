@@ -16,8 +16,17 @@ export default function RouteRestriction({ children }: RouteRestrictionProps) {
     return <>{children}</>
   }
 
-  // Allow /presentation route
-  if (pathname.startsWith('/presentation')) {
+  // Allow specific routes needed for functionality
+  const allowedRoutes = [
+    '/presentation',
+    '/api/download',
+    '/pdf-maker',
+    '/api/export-as-pdf',
+    '/api/presentation_to_pptx_model',
+  ]
+
+  // Check if current path starts with any allowed route
+  if (allowedRoutes.some(route => pathname.startsWith(route))) {
     return <>{children}</>
   }
 

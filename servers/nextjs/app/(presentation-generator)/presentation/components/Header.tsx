@@ -220,7 +220,7 @@ const Header = ({
               Export
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 z-[9999]">
+          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 !z-[9999]">
             <ExportOptions mobile={false} />
           </PopoverContent>
         </Popover>

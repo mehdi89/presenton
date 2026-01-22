@@ -88,16 +88,20 @@ export async function POST(req: NextRequest) {
       status: 500,
     });
   }
+  const filename = `${sanitizedTitle}_${Date.now()}.pdf`;
   const destinationPath = path.join(
     appDataDirectory,
     "exports",
-    `${sanitizedTitle}.pdf`
+    filename
   );
   await fs.promises.mkdir(path.dirname(destinationPath), { recursive: true });
   await fs.promises.writeFile(destinationPath, pdfBuffer);
 
+  // Return download URL instead of filesystem path
+  const downloadUrl = `/api/download/${filename}`;
+
   return NextResponse.json({
     success: true,
-    path: destinationPath,
+    path: downloadUrl,
   });
 }
