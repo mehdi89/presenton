@@ -220,7 +220,7 @@ const Header = ({
               Export
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 !z-[9999]">
+          <PopoverContent align="end" className="w-[250px] space-y-2 py-3 px-2 z-[100]">
             <ExportOptions mobile={false} />
           </PopoverContent>
         </Popover>
@@ -242,8 +242,7 @@ const Header = ({
         duration={40}
       />
       <div
-
-        className="bg-white w-full shadow-lg sticky top-0 border-b border-gray-200">
+        className="bg-white w-full shadow-lg sticky top-0 border-b border-gray-200 z-50">
 
         <Announcement />
         <Wrapper className="flex items-center justify-between py-3">
