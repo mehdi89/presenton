@@ -144,7 +144,7 @@ const Header = ({
   };
 
   const ExportOptions = ({ mobile }: { mobile: boolean }) => (
-    <div className={`space-y-2 max-md:mt-4 ${mobile ? "" : "bg-white"} rounded-lg`}>
+    <div className={`space-y-2 ${mobile ? "" : "bg-white"} rounded-lg`}>
       <Button
         onClick={() => {
           trackEvent(MixpanelEvent.Header_Export_PDF_Button_Clicked, { pathname });
@@ -172,9 +172,9 @@ const Header = ({
   );
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
-    <div className="flex flex-col lg:flex-row items-center gap-4">
+    <div className="flex items-center gap-2 lg:gap-4">
       {/* undo redo */}
-      <div className="flex items-center gap-2 ">
+      <div className="flex items-center gap-1 lg:gap-2">
         <ToolTip content="Undo">
           <button disabled={!canUndo} className="text-gray-700 disabled:opacity-50 hover:text-[#2299DD]" onClick={() => {
             onUndo();
@@ -210,12 +210,11 @@ const Header = ({
         Present
       </Button>
 
-      {/* Desktop Export Button with Popover */}
-
-      <div className="hidden lg:block relative">
+      {/* Export Button with Popover */}
+      <div className="relative">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Button className={`border border-gray-300 py-5 text-gray-700 font-bold rounded-[32px] transition-all duration-500 hover:bg-[#2299DD] hover:text-white hover:border-[#2299DD] w-full ${mobile ? "" : "bg-white"}`}>
+            <Button className={`border border-gray-300 py-5 text-gray-700 font-bold rounded-[32px] transition-all duration-500 hover:bg-[#2299DD] hover:text-white hover:border-[#2299DD] bg-white`}>
               <SquareArrowOutUpRight className="w-4 h-4 mr-1" />
               Export
             </Button>
@@ -224,11 +223,6 @@ const Header = ({
             <ExportOptions mobile={false} />
           </PopoverContent>
         </Popover>
-      </div>
-
-      {/* Mobile Export Section */}
-      <div className="lg:hidden flex flex-col w-full">
-        <ExportOptions mobile={true} />
       </div>
     </div>
   );
