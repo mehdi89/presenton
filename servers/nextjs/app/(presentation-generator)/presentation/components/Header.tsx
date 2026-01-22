@@ -6,7 +6,7 @@ import {
   Loader2,
   Redo2,
   Undo2,
-
+  ArrowLeft,
 } from "lucide-react";
 import React, { useState } from "react";
 import Wrapper from "@/components/Wrapper";
@@ -247,7 +247,19 @@ const Header = ({
 
         <Announcement />
         <Wrapper className="flex items-center justify-between py-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <ToolTip content="Back to Dashboard">
+              <button
+                onClick={() => {
+                  trackEvent(MixpanelEvent.Navigation, { from: pathname, to: '/dashboard' });
+                  router.push('/dashboard');
+                }}
+                className="text-gray-700 hover:text-[#2299DD] transition-colors"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+            </ToolTip>
+            <div className="h-6 w-px bg-gray-300" />
             <i className="tubeOnAI-logo text-2xl text-[#2299DD]" />
             <i className="tubeOnAI-brand-logo text-2xl text-gray-800" />
           </div>
