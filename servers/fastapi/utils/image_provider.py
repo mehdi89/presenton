@@ -43,8 +43,8 @@ def get_selected_image_provider() -> ImageProvider | None:
     Get the selected image provider from environment variables.
     Returns:
         ImageProvider: The selected image provider.
+
+    Note: Hardcoded to use gpt-image-1.5 model.
     """
-    image_provider_env = get_image_provider_env()
-    if image_provider_env:
-        return ImageProvider(image_provider_env)
-    return None
+    # Hardcoded to always use gpt-image-1.5
+    return ImageProvider.GPT_IMAGE_1_5
