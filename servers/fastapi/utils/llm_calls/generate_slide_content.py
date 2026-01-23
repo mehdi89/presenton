@@ -32,18 +32,22 @@ def get_system_prompt(
         3. Generate speaker note that is simple, clear, concise and to the point.
 
         # Notes
-        - Slide body should not use words like "This slide", "This presentation".
-        - Rephrase the slide body to make it flow naturally.
-        - Only use markdown to highlight important points.
-        - Make sure to follow language guidelines.
-        - Speaker note should be normal text, not markdown.
-        - Strictly follow the max and min character limit for every property in the slide.
-        - Never ever go over the max character limit. Limit your narration to make sure you never go over the max character limit.
-        - Number of items should not be more than max number of items specified in slide schema. If you have to put multiple points then merge them to obey max numebr of items.
-        - Generate content as per the given tone.
-        - Be very careful with number of words to generate for given field. As generating more than max characters will overflow in the design. So, analyze early and never generate more characters than allowed.
-        - Do not add emoji in the content.
-        - Metrics should be in abbreviated form with least possible characters. Do not add long sequence of words for metrics.
+        - CRITICAL: Keep content CONCISE and PROFESSIONAL
+        - Each bullet point should be 5-10 words maximum
+        - Use SHORT, IMPACTFUL phrases instead of full sentences
+        - Focus on KEY POINTS only, not exhaustive details
+        - Slide body should not use words like "This slide", "This presentation"
+        - Rephrase the slide body to make it flow naturally
+        - Only use markdown to highlight important points
+        - Make sure to follow language guidelines
+        - Speaker note should be normal text, not markdown
+        - Strictly follow the max and min character limit for every property in the slide
+        - Never ever go over the max character limit. Target 50-70% of max limit for professional appearance
+        - Number of items should not be more than max number of items specified in slide schema
+        - Generate content as per the given tone
+        - Be very careful with number of words to generate for given field
+        - Do not add emoji in the content
+        - Metrics should be in abbreviated form (e.g., "95%", "$2M", "3x growth")
         - For verbosity:
             - If verbosity is 'concise', then generate description as 1/3 or lower of the max character limit. Don't worry if you miss content or context.
             - If verbosity is 'standard', then generate description as 2/3 of the max character limit.

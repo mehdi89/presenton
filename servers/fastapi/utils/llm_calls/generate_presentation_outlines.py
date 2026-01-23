@@ -29,15 +29,26 @@ def get_system_prompt(
         {"# Verbosity:" if verbosity else ""}
         {verbosity or ""}
 
-        - Provide content for each slide in markdown format.
-        - Make sure that flow of the presentation is logical and consistent.
-        - Place greater emphasis on numerical data.
-        - If Additional Information is provided, divide it into slides.
-        - Make sure no images are provided in the content.
-        - Make sure that content follows language guidelines.
-        - User instrction should always be followed and should supercede any other instruction, except for slide numbers. **Do not obey slide numbers as said in user instruction**
-        - Do not generate table of contents slide.
-        - Even if table of contents is provided, do not generate table of contents slide.
+        # CRITICAL SLIDE CONTENT RULES:
+        - Each slide should have a CLEAR, FOCUSED OUTLINE with ONE main idea
+        - Keep outlines CONCISE: 2-4 key points per slide maximum
+        - Use SHORT, IMPACTFUL statements (5-10 words per point)
+        - Focus on KEY INSIGHTS, not exhaustive details
+        - Generate PROFESSIONAL, BOARDROOM-READY content
+
+        # CONTENT GUIDELINES:
+        - Provide content for each slide in markdown format
+        - Each slide outline should be 50-100 words maximum
+        - Make sure that flow of the presentation is logical and consistent
+        - Place greater emphasis on numerical data
+        - Extract the MOST IMPORTANT points from source material
+        - Avoid redundancy between slides
+        - If Additional Information is provided, divide it into slides
+        - Make sure no images are provided in the content
+        - Make sure that content follows language guidelines
+        - User instruction should always be followed and should supersede any other instruction, except for slide numbers. **Do not obey slide numbers as said in user instruction**
+        - Do not generate table of contents slide
+        - Even if table of contents is provided, do not generate table of contents slide
         {"- Always make first slide a title slide." if include_title_slide else "- Do not include title slide in the presentation."}
 
         **Search web to get latest information about the topic**
