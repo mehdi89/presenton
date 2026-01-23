@@ -28,9 +28,13 @@ import ToolTip from "@/components/ToolTip";
 const Header = ({
   presentation_id,
   currentSlide,
+  returnUrl,
+  summaryId,
 }: {
   presentation_id: string;
   currentSlide?: number;
+  returnUrl?: string;
+  summaryId?: string;
 }) => {
   const [showLoader, setShowLoader] = useState(false);
   const router = useRouter();
@@ -217,11 +221,22 @@ const Header = ({
         <Announcement />
         <Wrapper className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <ToolTip content="Back to Dashboard">
+            <ToolTip content={returnUrl && summaryId ? "Back to Summaries" : "Back to Dashboard"}>
               <button
                 onClick={() => {
-                  trackEvent(MixpanelEvent.Navigation, { from: pathname, to: '/dashboard' });
-                  router.push('/dashboard');
+                  if (returnUrl && summaryId) {
+                    const redirectUrl = `${returnUrl}/summaries/${summaryId}`;
+                    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: redirectUrl });
+                    // If in iframe, break out to parent; otherwise normal navigation
+                    if (window.self !== window.top) {
+                      window.top!.location.href = redirectUrl;
+                    } else {
+                      window.location.href = redirectUrl;
+                    }
+                  } else {
+                    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: '/dashboard' });
+                    router.push('/dashboard');
+                  }
                 }}
                 className="text-gray-700 hover:text-[#2299DD] transition-colors"
               >

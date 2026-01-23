@@ -25,6 +25,8 @@ import { useFontLoader } from "../../hooks/useFontLoader";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
+  returnUrl,
+  summaryId,
 }) => {
   const pathname = usePathname();
   // State management
@@ -128,7 +130,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         {isSaving && <Loader2 className="w-6 h-6 animate-spin text-blue-500" />}
       </div>
 
-      <Header presentation_id={presentation_id} currentSlide={selectedSlide} />
+      <Header
+        presentation_id={presentation_id}
+        currentSlide={selectedSlide}
+        returnUrl={returnUrl}
+        summaryId={summaryId}
+      />
       <Help />
 
       <div

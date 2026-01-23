@@ -13,4 +13,6 @@ export interface StreamState {
 
 export interface PresentationPageProps {
   presentation_id: string;
+  returnUrl?: string;
+  summaryId?: string;
 } 
