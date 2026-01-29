@@ -3,11 +3,13 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 
-
-const userDataDir = process.env.APP_DATA_DIRECTORY!;
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    // Read environment variable at request time, not module load time
+    const userDataDir = process.env.APP_DATA_DIRECTORY;
+
     const formData = await request.formData();
     const file = formData.get("file") as File;
 

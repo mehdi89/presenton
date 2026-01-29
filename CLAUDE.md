@@ -104,7 +104,6 @@ When using `IMAGE_PROVIDER=azure-flux`, configure these environment variables:
 | `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob Storage connection string for image persistence |
 | `CAN_CHANGE_KEYS` | Allow runtime API key changes (`false`) |
 | `DISABLE_ANONYMOUS_TRACKING` | Disable analytics (`true`) |
-| `RESTRICT_TO_PRESENTATION_ONLY` | Restrict UI to only `/presentation` route (`true`/`false`, default: `false`) |
 
 ## GitHub Secrets
 
@@ -161,25 +160,14 @@ az containerapp update \
   --set-env-vars "VAR_NAME=value"
 ```
 
-### Enable/Disable Route Restriction
+### Route Restriction (Domain-Based)
 
-To restrict access to only the `/presentation` route:
+Route restriction is **automatically applied based on domain**:
 
-```bash
-# Enable restriction (only /presentation accessible)
-az containerapp update \
-  --name tubeonai-presenton \
-  --resource-group TubeOnAI \
-  --set-env-vars "RESTRICT_TO_PRESENTATION_ONLY=true"
+- **On `slides.tubeonai.com`**: Only `/presentation` route is accessible, all other routes show "Page Not Found"
+- **On other domains** (localhost, Azure URL, etc.): All routes are accessible
 
-# Disable restriction (all routes accessible)
-az containerapp update \
-  --name tubeonai-presenton \
-  --resource-group TubeOnAI \
-  --set-env-vars "RESTRICT_TO_PRESENTATION_ONLY=false"
-```
-
-When enabled, all routes except `/presentation` will show a "Page Not Found" message.
+This is configured in `servers/nextjs/config/app.config.ts` and implemented in `servers/nextjs/components/RouteRestriction.tsx`. No environment variables are needed - the restriction is applied automatically based on the hostname.
 
 ### Scale Replicas
 
