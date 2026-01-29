@@ -18,6 +18,11 @@ from utils.get_env import (
     get_pexels_api_key_env,
     get_comfyui_url_env,
     get_comfyui_workflow_env,
+    get_azure_openai_api_key_env,
+    get_azure_openai_endpoint_env,
+    get_azure_model_env,
+    get_azure_flux_api_key_env,
+    get_azure_flux_endpoint_env,
 )
 from utils.get_env import get_google_api_key_env
 from utils.get_env import get_ollama_model_env
@@ -28,6 +33,7 @@ from utils.llm_provider import (
     get_llm_provider,
     is_custom_llm_selected,
     is_ollama_selected,
+    is_azure_selected,
 )
 from utils.ollama import pull_ollama_model
 from utils.image_provider import (
@@ -109,6 +115,20 @@ async def check_llm_and_image_provider_api_or_model_availability():
             if custom_model not in available_models:
                 raise Exception(f"Model {custom_model} is not available")
 
+        elif is_azure_selected():
+            azure_api_key = get_azure_openai_api_key_env()
+            azure_endpoint = get_azure_openai_endpoint_env()
+            azure_model = get_azure_model_env()
+            if not azure_api_key:
+                raise Exception("AZURE_OPENAI_API_KEY must be provided")
+            if not azure_endpoint:
+                raise Exception("AZURE_OPENAI_ENDPOINT must be provided")
+            if not azure_model:
+                raise Exception("AZURE_MODEL must be provided")
+            print("-" * 50)
+            print(f"Using Azure OpenAI with model: {azure_model}")
+            print("-" * 50)
+
         # Skip image provider and API key checks if image generation is disabled
         if is_image_generation_disabled():
             return
@@ -151,3 +171,25 @@ async def check_llm_and_image_provider_api_or_model_availability():
             workflow_json = get_comfyui_workflow_env()
             if not workflow_json:
                 raise Exception("COMFYUI_WORKFLOW must be provided")
+
+        elif selected_image_provider == ImageProvider.AZURE_FLUX:
+            azure_flux_api_key = get_azure_flux_api_key_env()
+            azure_flux_endpoint = get_azure_flux_endpoint_env()
+            if not azure_flux_api_key:
+                raise Exception("AZURE_FLUX_API_KEY must be provided")
+            if not azure_flux_endpoint:
+                raise Exception("AZURE_FLUX_ENDPOINT must be provided")
+            print("-" * 50)
+            print("Using Azure FLUX for image generation")
+            print("-" * 50)
+
+        elif selected_image_provider == ImageProvider.AZURE_DALLE:
+            azure_api_key = get_azure_openai_api_key_env()
+            azure_endpoint = get_azure_openai_endpoint_env()
+            if not azure_api_key:
+                raise Exception("AZURE_OPENAI_API_KEY must be provided for Azure DALL-E")
+            if not azure_endpoint:
+                raise Exception("AZURE_OPENAI_ENDPOINT must be provided for Azure DALL-E")
+            print("-" * 50)
+            print("Using Azure DALL-E for image generation")
+            print("-" * 50)
