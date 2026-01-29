@@ -11,6 +11,15 @@ from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
 from services.blob_storage_service import get_blob_storage_service
 from utils.get_env import (
+    get_azure_openai_api_key_env,
+    get_azure_openai_endpoint_env,
+    get_azure_openai_deployment_name_env,
+    get_azure_openai_api_version_env,
+    get_azure_flux_api_key_env,
+    get_azure_flux_endpoint_env,
+    get_azure_flux_deployment_name_env,
+    get_azure_flux_api_version_env,
+    get_azure_flux_model_env,
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
     get_pexels_api_key_env,
@@ -19,6 +28,8 @@ from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
 from utils.get_env import get_comfyui_workflow_env
 from utils.image_provider import (
+    is_azure_dalle_selected,
+    is_azure_flux_selected,
     is_gpt_image_1_5_selected,
     is_image_generation_disabled,
     is_pixels_selected,
@@ -28,6 +39,7 @@ from utils.image_provider import (
     is_dalle3_selected,
     is_comfyui_selected,
 )
+from models.azure_model_config import is_azure_dalle_model
 import uuid
 
 
@@ -54,6 +66,10 @@ class ImageGenerationService:
             return self.generate_image_openai_dalle3
         elif is_gpt_image_1_5_selected():
             return self.generate_image_openai_gpt_image_1_5
+        elif is_azure_dalle_selected():
+            return self.generate_image_azure_dalle
+        elif is_azure_flux_selected():
+            return self.generate_image_azure_flux
         elif is_comfyui_selected():
             return self.generate_image_comfyui
         return None
@@ -154,6 +170,141 @@ class ImageGenerationService:
             "gpt-image-1.5",
             get_gpt_image_1_5_quality_env() or "medium",
         )
+
+    async def generate_image_azure_dalle(
+        self, prompt: str, output_directory: str
+    ) -> str:
+        """
+        Generate image using Azure OpenAI DALL-E.
+
+        Azure OpenAI only supports DALL-E models for image generation.
+        Reference: https://go.microsoft.com/fwlink/?linkid=2197993
+        """
+        # Get Azure configuration
+        api_key = get_azure_openai_api_key_env()
+        endpoint = get_azure_openai_endpoint_env()
+        deployment_name = get_azure_openai_deployment_name_env()
+        api_version = get_azure_openai_api_version_env()
+
+        if not api_key or not endpoint or not deployment_name:
+            raise ValueError(
+                "Azure OpenAI configuration is incomplete. Please set "
+                "AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, and AZURE_OPENAI_DEPLOYMENT_NAME"
+            )
+
+        # Validate that deployment is a DALL-E model
+        if not is_azure_dalle_model(deployment_name):
+            raise ValueError(
+                f"Azure OpenAI image generation only supports DALL-E models. "
+                f"The deployment '{deployment_name}' is not a supported DALL-E model. "
+                f"Please use a DALL-E 2 or DALL-E 3 deployment for image generation. "
+                f"Learn more: https://go.microsoft.com/fwlink/?linkid=2197993"
+            )
+
+        # Create Azure OpenAI client
+        from openai import AsyncOpenAI
+
+        azure_client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=f"{endpoint.rstrip('/')}/openai/deployments/{deployment_name}",
+            default_query={"api-version": api_version},
+            default_headers={"api-key": api_key},
+        )
+
+        # Determine quality based on model
+        quality = get_dall_e_3_quality_env() or "standard"
+
+        result = await azure_client.images.generate(
+            model=deployment_name,
+            prompt=prompt,
+            n=1,
+            quality=quality if "dall-e-3" in deployment_name.lower() else NOT_GIVEN,
+            response_format="b64_json",
+            size="1024x1024",
+        )
+
+        image_data = base64.b64decode(result.data[0].b64_json)
+
+        # Upload to blob storage if configured, otherwise save locally
+        if self.blob_storage.is_enabled:
+            blob_url = self.blob_storage.upload_bytes(image_data, extension="png")
+            print(f"Uploaded Azure DALL-E image to blob storage: {blob_url}")
+            return blob_url
+
+        image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+        print(f"Generated Azure DALL-E image: {image_path}")
+        return image_path
+
+    async def generate_image_azure_flux(
+        self, prompt: str, output_directory: str
+    ) -> str:
+        """
+        Generate image using Azure FLUX-1.1-pro.
+
+        FLUX is a high-quality image generation model hosted on Azure.
+        It generates images in PNG format with base64 encoding.
+
+        Note: Unlike deployment-based models, FLUX uses the /openai/v1/images/generations endpoint
+        directly without deployment-specific routing.
+        """
+        # Get Azure FLUX configuration
+        api_key = get_azure_flux_api_key_env()
+        endpoint = get_azure_flux_endpoint_env()
+        model_name = get_azure_flux_model_env() or "FLUX-1.1-pro"
+
+        if not api_key or not endpoint:
+            raise ValueError(
+                "Azure FLUX configuration is incomplete. Please set "
+                "AZURE_FLUX_API_KEY and AZURE_FLUX_ENDPOINT"
+            )
+
+        # Build request payload matching web-app-v2 implementation
+        payload = {
+            "prompt": prompt,
+            "output_format": "png",
+            "n": 1,
+            "size": "1024x1024",
+            "model": model_name,
+        }
+
+        # Make direct HTTP request to Azure FLUX endpoint
+        # Uses /openai/v1/images/generations (NOT deployment-based endpoint)
+        url = f"{endpoint.rstrip('/')}/openai/v1/images/generations"
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": api_key,
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise HTTPException(
+                        status_code=response.status,
+                        detail=f"Azure FLUX API error: {error_text}",
+                    )
+
+                data = await response.json()
+                base64_data = data.get("data", [{}])[0].get("b64_json")
+
+                if not base64_data:
+                    raise ValueError("No base64 data in Azure FLUX response")
+
+                image_data = base64.b64decode(base64_data)
+
+        # Upload to blob storage if configured, otherwise save locally
+        if self.blob_storage.is_enabled:
+            blob_url = self.blob_storage.upload_bytes(image_data, extension="png")
+            print(f"Uploaded Azure FLUX image to blob storage: {blob_url}")
+            return blob_url
+
+        image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+        print(f"Generated Azure FLUX image: {image_path}")
+        return image_path
 
     async def _generate_image_google(
         self, prompt: str, output_directory: str, model: str

@@ -35,6 +35,16 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
     const canChangeKeys = (await response.json()).canChange;
     dispatch(setCanChangeKeys(canChangeKeys));
 
+    // Routes that should bypass LLM config validation (view-only routes)
+    const bypassValidationRoutes = ['/presentation', '/pdf-maker'];
+    const shouldBypassValidation = bypassValidationRoutes.some(r => route.startsWith(r));
+
+    // If on a view-only route, skip validation and show content directly
+    if (shouldBypassValidation) {
+      setIsLoading(false);
+      return;
+    }
+
     if (canChangeKeys) {
       const response = await fetch('/api/user-config');
       const llmConfig = await response.json();

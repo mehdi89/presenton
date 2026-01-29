@@ -44,6 +44,10 @@ from utils.async_iterator import iterator_to_async
 from utils.dummy_functions import do_nothing_async
 from utils.get_env import (
     get_anthropic_api_key_env,
+    get_azure_openai_api_key_env,
+    get_azure_openai_endpoint_env,
+    get_azure_openai_deployment_name_env,
+    get_azure_openai_api_version_env,
     get_custom_llm_api_key_env,
     get_custom_llm_url_env,
     get_disable_thinking_env,
@@ -52,6 +56,11 @@ from utils.get_env import (
     get_openai_api_key_env,
     get_tool_calls_env,
     get_web_grounding_env,
+)
+from models.azure_model_config import (
+    AzureModelConfig,
+    get_azure_model_type,
+    is_azure_anthropic_model,
 )
 from utils.llm_provider import get_llm_provider, get_model
 from utils.parsers import parse_bool_or_none
@@ -65,6 +74,10 @@ from utils.schema_utils import (
 class LLMClient:
     def __init__(self):
         self.llm_provider = get_llm_provider()
+        # Azure-specific configuration (must be set before _get_client)
+        self.azure_config: AzureModelConfig | None = None
+        if self.llm_provider == LLMProvider.AZURE:
+            self.azure_config = self._get_azure_config()
         self._client = self._get_client()
         self.tool_calls_handler = LLMToolCallsHandler(self)
 
@@ -96,6 +109,8 @@ class LLMClient:
                 return self._get_google_client()
             case LLMProvider.ANTHROPIC:
                 return self._get_anthropic_client()
+            case LLMProvider.AZURE:
+                return self._get_azure_client()
             case LLMProvider.OLLAMA:
                 return self._get_ollama_client()
             case LLMProvider.CUSTOM:
@@ -103,7 +118,7 @@ class LLMClient:
             case _:
                 raise HTTPException(
                     status_code=400,
-                    detail="LLM Provider must be either openai, google, anthropic, ollama, or custom",
+                    detail="LLM Provider must be either openai, google, anthropic, azure, ollama, or custom",
                 )
 
     def _get_openai_client(self):
@@ -146,6 +161,73 @@ class LLMClient:
             base_url=get_custom_llm_url_env(),
             api_key=get_custom_llm_api_key_env() or "null",
         )
+
+    def _get_azure_config(self) -> AzureModelConfig:
+        """Get Azure OpenAI configuration from environment variables."""
+        api_key = get_azure_openai_api_key_env()
+        endpoint = get_azure_openai_endpoint_env()
+        deployment_name = get_azure_openai_deployment_name_env()
+
+        if not api_key:
+            raise HTTPException(
+                status_code=400,
+                detail="Azure OpenAI API Key (AZURE_OPENAI_API_KEY) is not set",
+            )
+        if not endpoint:
+            raise HTTPException(
+                status_code=400,
+                detail="Azure OpenAI Endpoint (AZURE_OPENAI_ENDPOINT) is not set",
+            )
+        if not deployment_name:
+            raise HTTPException(
+                status_code=400,
+                detail="Azure OpenAI Deployment Name (AZURE_OPENAI_DEPLOYMENT_NAME) is not set",
+            )
+
+        return AzureModelConfig(
+            api_key=api_key,
+            endpoint=endpoint.rstrip("/"),
+            deployment_name=deployment_name,
+            api_version=get_azure_openai_api_version_env(),
+        )
+
+    def _get_azure_client(self):
+        """
+        Get Azure OpenAI client.
+
+        Supports multiple model types hosted on Azure:
+        - OpenAI models (GPT-4o, GPT-4, etc.) - OpenAI-compatible API
+        - Anthropic Claude models - Anthropic API format
+        - xAI Grok models - OpenAI-compatible API
+        - DeepSeek models - OpenAI-compatible API
+        """
+        if not self.azure_config:
+            raise HTTPException(
+                status_code=400,
+                detail="Azure configuration is not initialized",
+            )
+
+        # For Claude models, we'll use Anthropic client
+        # For other models (OpenAI, Grok, DeepSeek), use OpenAI-compatible client
+        model_name = self.azure_config.deployment_name
+
+        if is_azure_anthropic_model(model_name):
+            # Claude models use Anthropic API format
+            # Azure hosts Claude via endpoint: {endpoint}/anthropic/v1
+            # The Anthropic client will add /messages automatically
+            return AsyncAnthropic(
+                api_key=self.azure_config.api_key,
+                base_url=f"{self.azure_config.endpoint}/anthropic/v1",
+                default_headers={"anthropic-version": self.azure_config.api_version},
+            )
+        else:
+            # OpenAI, Grok, DeepSeek use OpenAI-compatible API
+            return AsyncOpenAI(
+                api_key=self.azure_config.api_key,
+                base_url=f"{self.azure_config.endpoint}/openai/deployments/{self.azure_config.deployment_name}",
+                default_query={"api-version": self.azure_config.api_version},
+                default_headers={"api-key": self.azure_config.api_key},
+            )
 
     # ? Prompts
     def _get_system_prompt(self, messages: List[LLMMessage]) -> str:
@@ -401,6 +483,48 @@ class LLMClient:
             depth=depth,
         )
 
+    async def _generate_azure(
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
+        depth: int = 0,
+    ) -> str | None:
+        """
+        Generate content using Azure-hosted models.
+
+        Routes to appropriate handler based on model type:
+        - Claude models -> Anthropic API
+        - OpenAI/Grok/DeepSeek -> OpenAI-compatible API
+        """
+        if not self.azure_config:
+            raise HTTPException(
+                status_code=400,
+                detail="Azure configuration is not initialized",
+            )
+
+        model_name = self.azure_config.deployment_name
+
+        if is_azure_anthropic_model(model_name):
+            # Use Anthropic generation method for Claude models
+            return await self._generate_anthropic(
+                model=model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                depth=depth,
+            )
+        else:
+            # Use OpenAI generation method for OpenAI/Grok/DeepSeek models
+            return await self._generate_openai(
+                model=model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                depth=depth,
+            )
+
     async def generate(
         self,
         model: str,
@@ -428,6 +552,13 @@ class LLMClient:
                 )
             case LLMProvider.ANTHROPIC:
                 content = await self._generate_anthropic(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    tools=parsed_tools,
+                )
+            case LLMProvider.AZURE:
+                content = await self._generate_azure(
                     model=model,
                     messages=messages,
                     max_tokens=max_tokens,
@@ -773,6 +904,53 @@ class LLMClient:
             depth=depth,
         )
 
+    async def _generate_azure_structured(
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
+        tools: Optional[List[dict]] = None,
+        max_tokens: Optional[int] = None,
+        depth: int = 0,
+    ):
+        """
+        Generate structured content using Azure-hosted models.
+
+        Routes to appropriate handler based on model type:
+        - Claude models -> Anthropic structured generation
+        - OpenAI/Grok/DeepSeek -> OpenAI structured generation
+        """
+        if not self.azure_config:
+            raise HTTPException(
+                status_code=400,
+                detail="Azure configuration is not initialized",
+            )
+
+        model_name = self.azure_config.deployment_name
+
+        if is_azure_anthropic_model(model_name):
+            # Use Anthropic structured generation for Claude models
+            return await self._generate_anthropic_structured(
+                model=model_name,
+                messages=messages,
+                response_format=response_format,
+                tools=tools,
+                max_tokens=max_tokens,
+                depth=depth,
+            )
+        else:
+            # Use OpenAI structured generation for OpenAI/Grok/DeepSeek models
+            return await self._generate_openai_structured(
+                model=model_name,
+                messages=messages,
+                response_format=response_format,
+                strict=strict,
+                tools=tools,
+                max_tokens=max_tokens,
+                depth=depth,
+            )
+
     async def generate_structured(
         self,
         model: str,
@@ -808,6 +986,15 @@ class LLMClient:
                     model=model,
                     messages=messages,
                     response_format=response_format,
+                    tools=parsed_tools,
+                    max_tokens=max_tokens,
+                )
+            case LLMProvider.AZURE:
+                content = await self._generate_azure_structured(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
                     tools=parsed_tools,
                     max_tokens=max_tokens,
                 )
@@ -1095,6 +1282,48 @@ class LLMClient:
             depth=depth,
         )
 
+    def _stream_azure(
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[dict]] = None,
+        depth: int = 0,
+    ):
+        """
+        Stream content using Azure-hosted models.
+
+        Routes to appropriate handler based on model type:
+        - Claude models -> Anthropic streaming
+        - OpenAI/Grok/DeepSeek -> OpenAI streaming
+        """
+        if not self.azure_config:
+            raise HTTPException(
+                status_code=400,
+                detail="Azure configuration is not initialized",
+            )
+
+        model_name = self.azure_config.deployment_name
+
+        if is_azure_anthropic_model(model_name):
+            # Use Anthropic streaming for Claude models
+            return self._stream_anthropic(
+                model=model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                depth=depth,
+            )
+        else:
+            # Use OpenAI streaming for OpenAI/Grok/DeepSeek models
+            return self._stream_openai(
+                model=model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                tools=tools,
+                depth=depth,
+            )
+
     def stream(
         self,
         model: str,
@@ -1121,6 +1350,13 @@ class LLMClient:
                 )
             case LLMProvider.ANTHROPIC:
                 return self._stream_anthropic(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    tools=parsed_tools,
+                )
+            case LLMProvider.AZURE:
+                return self._stream_azure(
                     model=model,
                     messages=messages,
                     max_tokens=max_tokens,
@@ -1517,6 +1753,53 @@ class LLMClient:
             depth=depth,
         )
 
+    def _stream_azure_structured(
+        self,
+        model: str,
+        messages: List[LLMMessage],
+        response_format: dict,
+        strict: bool = False,
+        tools: Optional[List[dict]] = None,
+        max_tokens: Optional[int] = None,
+        depth: int = 0,
+    ):
+        """
+        Stream structured content using Azure-hosted models.
+
+        Routes to appropriate handler based on model type:
+        - Claude models -> Anthropic structured streaming
+        - OpenAI/Grok/DeepSeek -> OpenAI structured streaming
+        """
+        if not self.azure_config:
+            raise HTTPException(
+                status_code=400,
+                detail="Azure configuration is not initialized",
+            )
+
+        model_name = self.azure_config.deployment_name
+
+        if is_azure_anthropic_model(model_name):
+            # Use Anthropic structured streaming for Claude models
+            return self._stream_anthropic_structured(
+                model=model_name,
+                messages=messages,
+                response_format=response_format,
+                tools=tools,
+                max_tokens=max_tokens,
+                depth=depth,
+            )
+        else:
+            # Use OpenAI structured streaming for OpenAI/Grok/DeepSeek models
+            return self._stream_openai_structured(
+                model=model_name,
+                messages=messages,
+                response_format=response_format,
+                strict=strict,
+                tools=tools,
+                max_tokens=max_tokens,
+                depth=depth,
+            )
+
     def stream_structured(
         self,
         model: str,
@@ -1551,6 +1834,15 @@ class LLMClient:
                     model=model,
                     messages=messages,
                     response_format=response_format,
+                    tools=parsed_tools,
+                    max_tokens=max_tokens,
+                )
+            case LLMProvider.AZURE:
+                return self._stream_azure_structured(
+                    model=model,
+                    messages=messages,
+                    response_format=response_format,
+                    strict=strict,
                     tools=parsed_tools,
                     max_tokens=max_tokens,
                 )
