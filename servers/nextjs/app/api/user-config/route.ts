@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import { LLMConfig } from "@/types/llm_config";
 
-const userConfigPath = process.env.USER_CONFIG_PATH!;
-const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  // Read environment variables at request time, not module load time
+  const userConfigPath = process.env.USER_CONFIG_PATH;
+  const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
+
   if (!canChangeKeys) {
     return NextResponse.json({
       error: "You are not allowed to access this resource",
@@ -27,9 +30,20 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // Read environment variables at request time, not module load time
+  const userConfigPath = process.env.USER_CONFIG_PATH;
+  const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
+
   if (!canChangeKeys) {
     return NextResponse.json({
       error: "You are not allowed to access this resource",
+    });
+  }
+
+  if (!userConfigPath) {
+    return NextResponse.json({
+      error: "User config path not found",
+      status: 500,
     });
   }
 
