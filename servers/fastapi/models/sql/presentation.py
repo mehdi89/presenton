@@ -42,6 +42,13 @@ class PresentationModel(SQLModel, table=True):
     include_title_slide: bool = Field(sa_column=Column(Boolean), default=True)
     web_search: bool = Field(sa_column=Column(Boolean), default=False)
 
+    # TubeOnAI integration fields for token deduction
+    tubeonai_auth_token: Optional[str] = Field(sa_column=Column(String), default=None)
+    tubeonai_user_id: Optional[str] = Field(sa_column=Column(String), default=None)
+    tubeonai_source_id: Optional[str] = Field(sa_column=Column(String), default=None)
+    tubeonai_source_type: Optional[str] = Field(sa_column=Column(String), default=None)
+    tubeonai_provider_model_id: Optional[str] = Field(sa_column=Column(String), default=None)
+
     def get_new_presentation(self):
         return PresentationModel(
             id=uuid.uuid4(),

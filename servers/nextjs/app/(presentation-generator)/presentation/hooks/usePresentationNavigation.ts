@@ -12,9 +12,31 @@ export const usePresentationNavigation = (
 
   const isPresentMode = searchParams.get("mode") === "present";
   const stream = searchParams.get("stream");
+  const returnUrl = searchParams.get("returnUrl");
+  const summaryId = searchParams.get("summaryId");
   const currentSlide = parseInt(
     searchParams.get("slide") || `${selectedSlide}` || "0"
   );
+
+  // Helper to build URL with preserved params
+  const buildUrl = useCallback((basePath: string, additionalParams: Record<string, string> = {}) => {
+    let url = `${basePath}?id=${presentationId}`;
+
+    // Add additional params first
+    Object.entries(additionalParams).forEach(([key, value]) => {
+      url += `&${key}=${encodeURIComponent(value)}`;
+    });
+
+    // Preserve returnUrl and summaryId
+    if (returnUrl) {
+      url += `&returnUrl=${encodeURIComponent(returnUrl)}`;
+    }
+    if (summaryId) {
+      url += `&summaryId=${encodeURIComponent(summaryId)}`;
+    }
+
+    return url;
+  }, [presentationId, returnUrl, summaryId]);
 
   const handleSlideClick = useCallback((index: number) => {
     const slideElement = document.getElementById(`slide-${index}`);
@@ -39,22 +61,24 @@ export const usePresentationNavigation = (
 
   const handlePresentExit = useCallback(() => {
     setIsFullscreen(false);
-    router.push(`/presentation?id=${presentationId}`);
-  }, [router, presentationId, setIsFullscreen]);
+    router.push(buildUrl('/presentation'));
+  }, [router, buildUrl, setIsFullscreen]);
 
   const handleSlideChange = useCallback((newSlide: number, presentationData: any) => {
     if (newSlide >= 0 && newSlide < presentationData?.slides.length!) {
       setSelectedSlide(newSlide);
       router.push(
-        `/presentation?id=${presentationId}&mode=present&slide=${newSlide}`,
+        buildUrl('/presentation', { mode: 'present', slide: newSlide.toString() }),
         { scroll: false }
       );
     }
-  }, [router, presentationId, setSelectedSlide]);
+  }, [router, buildUrl, setSelectedSlide]);
 
   return {
     isPresentMode,
     stream,
+    returnUrl,
+    summaryId,
     currentSlide,
     handleSlideClick,
     toggleFullscreen,

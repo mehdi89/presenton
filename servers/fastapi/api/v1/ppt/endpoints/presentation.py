@@ -42,6 +42,7 @@ from utils.llm_calls.generate_presentation_outlines import generate_ppt_outline
 from models.sql.slide import SlideModel
 from models.sse_response import SSECompleteResponse, SSEErrorResponse, SSEResponse
 from utils.usage_tracker import UsageTracker
+from services.tubeonai_service import TUBEONAI_SERVICE
 
 from services.database import get_async_session
 from services.temp_file_service import TEMP_FILE_SERVICE
@@ -139,8 +140,21 @@ async def create_presentation(
     include_table_of_contents: Annotated[bool, Body()] = False,
     include_title_slide: Annotated[bool, Body()] = True,
     web_search: Annotated[bool, Body()] = False,
+    # TubeOnAI integration fields for token deduction
+    tubeonai_auth_token: Annotated[Optional[str], Body()] = None,
+    tubeonai_user_id: Annotated[Optional[str], Body()] = None,
+    tubeonai_source_id: Annotated[Optional[str], Body()] = None,
+    tubeonai_source_type: Annotated[Optional[str], Body()] = None,
+    tubeonai_provider_model_id: Annotated[Optional[str], Body()] = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
+    # Debug logging for TubeOnAI integration
+    print(f"[Presenton Create] TubeOnAI metadata received:")
+    print(f"  - auth_token: {'SET' if tubeonai_auth_token else 'NULL'}")
+    print(f"  - user_id: {tubeonai_user_id}")
+    print(f"  - source_id: {tubeonai_source_id}")
+    print(f"  - source_type: {tubeonai_source_type}")
+    print(f"  - instructions: {'SET' if instructions else 'NULL'}")
 
     if include_table_of_contents and n_slides < 3:
         raise HTTPException(
@@ -162,6 +176,12 @@ async def create_presentation(
         include_table_of_contents=include_table_of_contents,
         include_title_slide=include_title_slide,
         web_search=web_search,
+        # TubeOnAI integration fields
+        tubeonai_auth_token=tubeonai_auth_token,
+        tubeonai_user_id=tubeonai_user_id,
+        tubeonai_source_id=tubeonai_source_id,
+        tubeonai_source_type=tubeonai_source_type,
+        tubeonai_provider_model_id=tubeonai_provider_model_id,
     )
 
     sql_session.add(presentation)
@@ -276,7 +296,12 @@ async def stream_presentation(
 
     image_generation_service = ImageGenerationService(get_images_directory())
 
+    # Initialize usage tracker to track token usage for TubeOnAI deduction
+    usage_tracker = UsageTracker()
+
     async def inner():
+        nonlocal usage_tracker
+
         structure = presentation.get_structure()
         layout = presentation.get_layout()
         outline = presentation.get_presentation_outline()
@@ -300,6 +325,7 @@ async def stream_presentation(
                     presentation.tone,
                     presentation.verbosity,
                     presentation.instructions,
+                    usage_tracker,  # Pass usage tracker to record slide generation tokens
                 )
             except HTTPException as e:
                 yield SSEErrorResponse(detail=e.detail).to_string()
@@ -337,6 +363,10 @@ async def stream_presentation(
         generated_assets = []
         for assets_list in generated_assets_lists:
             generated_assets.extend(assets_list)
+            # Track image generation count
+            for asset in assets_list:
+                if hasattr(asset, 'type') and 'image' in str(getattr(asset, 'type', '')).lower():
+                    usage_tracker.add_usage(phase="image")
 
         # Moved this here to make sure new slides are generated before deleting the old ones
         await sql_session.execute(
@@ -353,6 +383,32 @@ async def stream_presentation(
             **presentation.model_dump(),
             slides=slides,
         )
+
+        # Deduct tokens from TubeOnAI if auth metadata is available
+        if presentation.tubeonai_auth_token and presentation.tubeonai_source_id:
+            try:
+                source_type = TUBEONAI_SERVICE.map_source_type(
+                    presentation.tubeonai_source_type or "video"
+                )
+                deduction_result = await TUBEONAI_SERVICE.deduct_tokens(
+                    auth_token=presentation.tubeonai_auth_token,
+                    content_id=presentation.tubeonai_source_id,
+                    source=source_type,
+                    usage_tracker=usage_tracker,
+                    presentation_id=str(id),
+                    user_id=presentation.tubeonai_user_id,
+                    provider_model_id=presentation.tubeonai_provider_model_id,
+                )
+
+                usage_metadata = usage_tracker.to_metadata()
+                print(f"[TubeOnAI] Token deduction result: success={deduction_result.success}, "
+                      f"tokens={usage_metadata.total_tokens}, images={usage_metadata.image_generation_count}")
+
+                if not deduction_result.success:
+                    print(f"[TubeOnAI] Token deduction warning: {deduction_result.error}")
+            except Exception as e:
+                print(f"[TubeOnAI] Token deduction error: {str(e)}")
+                # Don't fail the presentation generation if deduction fails
 
         yield SSECompleteResponse(
             key="presentation",
@@ -770,6 +826,31 @@ async def generate_presentation_handler(
 
         # Log usage for debugging
         print(f"[Usage] Presentation generated with usage: {usage_metadata.model_dump()}")
+
+        # Deduct tokens from TubeOnAI if auth metadata is available
+        if request.tubeonai_auth_token and request.tubeonai_source_id:
+            try:
+                source_type = TUBEONAI_SERVICE.map_source_type(
+                    request.tubeonai_source_type or "video"
+                )
+                deduction_result = await TUBEONAI_SERVICE.deduct_tokens(
+                    auth_token=request.tubeonai_auth_token,
+                    content_id=request.tubeonai_source_id,
+                    source=source_type,
+                    usage_tracker=usage_tracker,
+                    presentation_id=str(presentation_id),
+                    user_id=request.tubeonai_user_id,
+                    provider_model_id=request.tubeonai_provider_model_id,
+                )
+
+                print(f"[TubeOnAI] Token deduction result: success={deduction_result.success}, "
+                      f"tokens={usage_metadata.total_tokens}, images={usage_metadata.image_generation_count}")
+
+                if not deduction_result.success:
+                    print(f"[TubeOnAI] Token deduction warning: {deduction_result.error}")
+            except Exception as e:
+                print(f"[TubeOnAI] Token deduction error: {str(e)}")
+                # Don't fail the presentation generation if deduction fails
 
         if async_status:
             async_status.message = "Presentation generation completed"

@@ -244,8 +244,7 @@ const Header = ({
               </button>
             </ToolTip>
             <div className="h-6 w-px bg-gray-300" />
-            <i className="tubeOnAI-logo text-2xl text-[#2299DD]" />
-            <i className="tubeOnAI-brand-logo text-2xl text-gray-800" />
+            <span className="text-xl font-semibold text-gray-800">Presenton</span>
           </div>
 
           {/* Desktop Menu */}

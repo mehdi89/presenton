@@ -40,3 +40,19 @@ class GeneratePresentationRequest(BaseModel):
     trigger_webhook: bool = Field(
         default=False, description="Whether to trigger subscribed webhooks"
     )
+    # TubeOnAI integration fields for token deduction
+    tubeonai_auth_token: Optional[str] = Field(
+        default=None, description="TubeOnAI auth token for token deduction"
+    )
+    tubeonai_user_id: Optional[str] = Field(
+        default=None, description="TubeOnAI user ID"
+    )
+    tubeonai_source_id: Optional[str] = Field(
+        default=None, description="TubeOnAI source/content ID"
+    )
+    tubeonai_source_type: Optional[str] = Field(
+        default=None, description="TubeOnAI source type (video, collection, etc.)"
+    )
+    tubeonai_provider_model_id: Optional[str] = Field(
+        default=None, description="TubeOnAI provider model ID"
+    )
