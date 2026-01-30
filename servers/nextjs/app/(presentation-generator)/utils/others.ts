@@ -61,14 +61,18 @@ export function removeUUID(fileName: string) {
 export function sanitizeFilename(input: string | null | undefined, replacement = '') {
   // Start with a safe base string to avoid calling string methods on null/undefined
   let sanitized = (input ?? '').toString();
+
+  // Trim leading and trailing whitespace
+  sanitized = sanitized.trim();
+
   // Remove any null bytes first
   sanitized = sanitized.replace(/\0/g, '');
-  
+
   // Remove or replace path traversal sequences
   sanitized = sanitized.replace(/\.\./g, replacement);
-  
+
   // Regular filename sanitization (but preserve forward slashes for paths)
-  const illegalRe = /[\?<>\\:\*\|"]/g; // Removed / from illegal characters
+  const illegalRe = /[\?<>\\:\*\|"&,;]/g; // Added &, comma, semicolon to illegal characters
   const controlRe = /[\x00-\x1f\x80-\x9f]/g;
   const reservedRe = /^\.+$/;
   const windowsReservedRe = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
@@ -78,6 +82,9 @@ export function sanitizeFilename(input: string | null | undefined, replacement =
     .replace(illegalRe, replacement)
     .replace(controlRe, replacement);
 
+  // Replace multiple consecutive spaces/underscores with single underscore
+  sanitized = sanitized.replace(/[\s_]+/g, '_');
+
   // Split path into segments to handle reserved names and trailing characters per segment
   const pathSegments = sanitized.split('/');
   const cleanedSegments = pathSegments.map(segment => {
@@ -85,10 +92,13 @@ export function sanitizeFilename(input: string | null | undefined, replacement =
       .replace(reservedRe, replacement)
       .replace(windowsReservedRe, replacement)
       .replace(windowsTrailingRe, replacement);
-    
+
     // Remove any remaining path traversal attempts in individual segments
     cleanSegment = cleanSegment.replace(/\.\./g, replacement);
-    
+
+    // Trim underscores from start and end of segment
+    cleanSegment = cleanSegment.replace(/^_+|_+$/g, '');
+
     return cleanSegment;
   });
 
@@ -96,7 +106,7 @@ export function sanitizeFilename(input: string | null | undefined, replacement =
 
   // Remove any remaining path traversal attempts after other replacements
   sanitized = sanitized.replace(/\.\./g, replacement);
-  
+
   // Normalize multiple consecutive slashes to single slash
   sanitized = sanitized.replace(/\/+/g, '/');
 

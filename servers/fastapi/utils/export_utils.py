@@ -1,17 +1,30 @@
 import json
 import os
+import re
 import aiohttp
 from typing import Literal
 import uuid
 from fastapi import HTTPException
 from pathvalidate import sanitize_filename
+from urllib.parse import quote
 
 from models.pptx_models import PptxPresentationModel
 from models.presentation_and_path import PresentationAndPath
 from services.pptx_presentation_creator import PptxPresentationCreator
 from services.temp_file_service import TEMP_FILE_SERVICE
 from utils.asset_directory_utils import get_exports_directory
-import uuid
+
+
+def clean_filename(title: str) -> str:
+    """Sanitize and clean a filename for safe filesystem and URL use."""
+    sanitized = sanitize_filename(title or str(uuid.uuid4()))
+    # Remove commas, semicolons, and other problematic characters
+    sanitized = re.sub(r'[,;\'\"&]', '', sanitized)
+    # Replace spaces and multiple underscores with single underscore
+    sanitized = re.sub(r'[\s_]+', '_', sanitized).strip('_')
+    if not sanitized:
+        sanitized = "presentation"
+    return sanitized
 
 
 async def export_presentation(
@@ -40,15 +53,16 @@ async def export_presentation(
         await pptx_creator.create_ppt()
 
         export_directory = get_exports_directory()
-        filename = f"{sanitize_filename(title or str(uuid.uuid4()))}_{uuid.uuid4().hex[:8]}.pptx"
+        cleaned_title = clean_filename(title)
+        filename = f"{cleaned_title}_{uuid.uuid4().hex[:8]}.pptx"
         pptx_path = os.path.join(
             export_directory,
             filename,
         )
         pptx_creator.save(pptx_path)
 
-        # Return download URL instead of filesystem path
-        download_url = f"/api/download/{filename}"
+        # Return download URL with URL-encoded filename
+        download_url = f"/api/download/{quote(filename)}"
 
         return PresentationAndPath(
             presentation_id=presentation_id,
@@ -60,7 +74,7 @@ async def export_presentation(
                 "http://localhost/api/export-as-pdf",
                 json={
                     "id": str(presentation_id),
-                    "title": sanitize_filename(title or str(uuid.uuid4())),
+                    "title": clean_filename(title),
                 },
             ) as response:
                 response_json = await response.json()

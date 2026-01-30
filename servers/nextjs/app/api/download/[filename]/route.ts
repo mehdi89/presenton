@@ -4,10 +4,10 @@ import path from "path";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    const { filename } = params;
+    const { filename } = await params;
 
     // Prevent directory traversal attacks
     if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
@@ -19,6 +19,7 @@ export async function GET(
 
     const appDataDirectory = process.env.APP_DATA_DIRECTORY;
     if (!appDataDirectory) {
+      console.error("[Download] APP_DATA_DIRECTORY environment variable not set");
       return NextResponse.json(
         { error: "App data directory not configured" },
         { status: 500 }
@@ -29,6 +30,7 @@ export async function GET(
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
+      console.error(`[Download] File not found: ${filePath}`);
       return NextResponse.json(
         { error: "File not found" },
         { status: 404 }
@@ -56,7 +58,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Download error:", error);
+    console.error("[Download] Error:", error);
     return NextResponse.json(
       { error: "Failed to download file" },
       { status: 500 }

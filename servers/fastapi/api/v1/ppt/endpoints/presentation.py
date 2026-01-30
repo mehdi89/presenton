@@ -462,18 +462,30 @@ async def update_presentation(
 async def export_presentation_as_pptx(
     pptx_model: Annotated[PptxPresentationModel, Body()],
 ):
+    import re
+    from pathvalidate import sanitize_filename
+    from urllib.parse import quote
+
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
 
     pptx_creator = PptxPresentationCreator(pptx_model, temp_dir)
     await pptx_creator.create_ppt()
 
     export_directory = get_exports_directory()
-    pptx_path = os.path.join(
-        export_directory, f"{pptx_model.name or uuid.uuid4()}.pptx"
-    )
+    # Generate unique filename with sanitized name
+    sanitized_name = sanitize_filename(pptx_model.name or str(uuid.uuid4()))
+    # Remove commas, semicolons, and other problematic characters
+    sanitized_name = re.sub(r'[,;\'\"&]', '', sanitized_name)
+    # Replace spaces and multiple underscores with single underscore
+    sanitized_name = re.sub(r'[\s_]+', '_', sanitized_name).strip('_')
+    if not sanitized_name:
+        sanitized_name = "presentation"
+    filename = f"{sanitized_name}_{uuid.uuid4().hex[:8]}.pptx"
+    pptx_path = os.path.join(export_directory, filename)
     pptx_creator.save(pptx_path)
 
-    return pptx_path
+    # Return download URL with URL-encoded filename
+    return f"/api/download/{quote(filename)}"
 
 
 @PRESENTATION_ROUTER.post("/export", response_model=PresentationPathAndEditPath)

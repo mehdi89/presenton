@@ -123,17 +123,21 @@ const Header = ({
       setShowLoader(false);
     }
   };
-  const downloadLink = (path: string) => {
-    // if we have popup access give direct download if not redirect to the path
-    if (window.opener) {
-      window.open(path, '_blank');
-    } else {
-      const link = document.createElement('a');
-      link.href = path;
-      link.download = path.split('/').pop() || 'download';
-      document.body.appendChild(link);
-      link.click();
-    }
+  const downloadLink = (downloadPath: string) => {
+    // Decode the filename for the download attribute
+    const encodedFilename = downloadPath.split('/').pop() || 'download';
+    const decodedFilename = decodeURIComponent(encodedFilename);
+
+    const link = document.createElement('a');
+    link.href = downloadPath;
+    link.download = decodedFilename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    // Clean up the link element after download starts
+    setTimeout(() => {
+      document.body.removeChild(link);
+    }, 100);
   };
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
