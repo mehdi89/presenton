@@ -34,6 +34,7 @@ from models.sql.template import TemplateModel
 
 from services.documents_loader import DocumentsLoader
 from services.webhook_service import WebhookService
+from services.blob_storage_service import get_blob_storage_service
 from utils.get_layout_by_name import get_layout_by_name
 from services.image_generation_service import ImageGenerationService
 from utils.dict_utils import deep_update
@@ -484,7 +485,22 @@ async def export_presentation_as_pptx(
     pptx_path = os.path.join(export_directory, filename)
     pptx_creator.save(pptx_path)
 
-    # Return download URL with URL-encoded filename
+    # Try to upload to Azure Blob Storage (for multi-replica support)
+    blob_service = get_blob_storage_service()
+    if blob_service.is_enabled:
+        try:
+            blob_url = blob_service.upload_export(pptx_path)
+            print(f"[PPTX Export] Uploaded to blob storage: {blob_url}")
+            # Clean up local file after successful upload
+            try:
+                os.remove(pptx_path)
+            except Exception:
+                pass
+            return blob_url
+        except Exception as e:
+            print(f"[PPTX Export] Blob upload failed, using local: {e}")
+
+    # Fallback: Return download URL with URL-encoded filename
     return f"/api/download/{quote(filename)}"
 
 

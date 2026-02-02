@@ -128,6 +128,10 @@ def get_azure_storage_container_env():
     return os.getenv("AZURE_STORAGE_CONTAINER", "images")
 
 
+def get_azure_storage_exports_container_env():
+    return os.getenv("AZURE_STORAGE_EXPORTS_CONTAINER", "exports")
+
+
 # Azure OpenAI
 def get_azure_openai_api_key_env():
     return os.getenv("AZURE_OPENAI_API_KEY")

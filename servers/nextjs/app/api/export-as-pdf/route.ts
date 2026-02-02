@@ -4,6 +4,7 @@ import puppeteer, { Browser } from "puppeteer";
 
 import { sanitizeFilename } from "@/app/(presentation-generator)/utils/others";
 import { NextResponse, NextRequest } from "next/server";
+import { uploadToBlob, isBlobStorageEnabled } from "@/lib/blob-storage";
 
 export async function POST(req: NextRequest) {
   let browser: Browser | null = null;
@@ -117,6 +118,25 @@ export async function POST(req: NextRequest) {
 
     const sanitizedTitle = sanitizeFilename(title ?? "presentation");
     const filename = `${sanitizedTitle}_${Date.now()}.pdf`;
+
+    // Try to upload to Azure Blob Storage first (for multi-replica support)
+    if (isBlobStorageEnabled()) {
+      const blobUrl = await uploadToBlob(
+        Buffer.from(pdfBuffer),
+        filename,
+        "application/pdf"
+      );
+      if (blobUrl) {
+        console.log(`[PDF Export] Uploaded to blob storage: ${blobUrl}`);
+        return NextResponse.json({
+          success: true,
+          path: blobUrl,
+        });
+      }
+      console.log("[PDF Export] Blob upload failed, falling back to local storage");
+    }
+
+    // Fallback to local filesystem (for local development)
     const destinationPath = path.join(
       appDataDirectory,
       "exports",
