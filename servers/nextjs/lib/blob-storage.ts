@@ -4,57 +4,23 @@
  * When AZURE_STORAGE_CONNECTION_STRING is set, exports (PDF/PPTX) are uploaded
  * to Azure Blob Storage and public URLs are returned. This enables multi-replica
  * support in Azure Container Apps.
+ *
+ * Uses dynamic imports to avoid crypto/digest errors in Next.js when blob storage
+ * is not configured.
  */
-
-import { BlobServiceClient, ContainerClient } from "@azure/storage-blob";
 
 const EXPORTS_CONTAINER = process.env.AZURE_STORAGE_EXPORTS_CONTAINER || "exports";
 
-let blobServiceClient: BlobServiceClient | null = null;
-let containerClient: ContainerClient | null = null;
-
 function getConnectionString(): string | undefined {
   return process.env.AZURE_STORAGE_CONNECTION_STRING;
-}
-
-function getBlobServiceClient(): BlobServiceClient | null {
-  if (blobServiceClient) return blobServiceClient;
-
-  const connectionString = getConnectionString();
-  if (!connectionString) {
-    return null;
-  }
-
-  blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-  return blobServiceClient;
-}
-
-async function getContainerClient(): Promise<ContainerClient | null> {
-  if (containerClient) return containerClient;
-
-  const client = getBlobServiceClient();
-  if (!client) return null;
-
-  containerClient = client.getContainerClient(EXPORTS_CONTAINER);
-
-  // Ensure container exists with public blob access
-  try {
-    await containerClient.createIfNotExists({
-      access: "blob", // Public read access for blobs
-    });
-  } catch (error) {
-    console.error("[BlobStorage] Failed to create container:", error);
-    // Container might already exist, continue
-  }
-
-  return containerClient;
 }
 
 /**
  * Check if Azure Blob Storage is configured
  */
 export function isBlobStorageEnabled(): boolean {
-  return !!getConnectionString();
+  const connStr = getConnectionString();
+  return !!connStr && connStr.trim().length > 0;
 }
 
 /**
@@ -70,14 +36,30 @@ export async function uploadToBlob(
   filename: string,
   contentType: string
 ): Promise<string | null> {
-  const container = await getContainerClient();
-  if (!container) {
+  if (!isBlobStorageEnabled()) {
     console.log("[BlobStorage] Not configured, skipping upload");
     return null;
   }
 
   try {
-    const blobClient = container.getBlockBlobClient(filename);
+    // Dynamic import to avoid crypto errors when not using blob storage
+    const { BlobServiceClient } = await import("@azure/storage-blob");
+
+    const connectionString = getConnectionString()!;
+    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+    const containerClient = blobServiceClient.getContainerClient(EXPORTS_CONTAINER);
+
+    // Ensure container exists with public blob access
+    try {
+      await containerClient.createIfNotExists({
+        access: "blob",
+      });
+    } catch (error) {
+      // Container might already exist, continue
+      console.log("[BlobStorage] Container check:", error);
+    }
+
+    const blobClient = containerClient.getBlockBlobClient(filename);
 
     // Encode filename for Content-Disposition header (handle Unicode)
     const safeFilename = filename.replace(/[^\x20-\x7E]/g, "_");
@@ -103,11 +85,16 @@ export async function uploadToBlob(
  * Delete a blob by filename
  */
 export async function deleteBlob(filename: string): Promise<boolean> {
-  const container = await getContainerClient();
-  if (!container) return false;
+  if (!isBlobStorageEnabled()) return false;
 
   try {
-    const blobClient = container.getBlockBlobClient(filename);
+    const { BlobServiceClient } = await import("@azure/storage-blob");
+
+    const connectionString = getConnectionString()!;
+    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+    const containerClient = blobServiceClient.getContainerClient(EXPORTS_CONTAINER);
+    const blobClient = containerClient.getBlockBlobClient(filename);
+
     await blobClient.deleteIfExists();
     return true;
   } catch (error) {
