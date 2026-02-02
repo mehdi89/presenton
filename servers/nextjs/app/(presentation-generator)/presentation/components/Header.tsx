@@ -124,20 +124,34 @@ const Header = ({
     }
   };
   const downloadLink = (downloadPath: string) => {
-    // Decode the filename for the download attribute
-    const encodedFilename = downloadPath.split('/').pop() || 'download';
-    const decodedFilename = decodeURIComponent(encodedFilename);
+    // Build the full URL
+    const fullUrl = new URL(downloadPath, window.location.origin).href;
 
-    const link = document.createElement('a');
-    link.href = downloadPath;
-    link.download = decodedFilename;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    // Clean up the link element after download starts
-    setTimeout(() => {
-      document.body.removeChild(link);
-    }, 100);
+    // Method 1: Try using fetch + blob for reliable download
+    fetch(fullUrl)
+      .then(response => {
+        if (!response.ok) throw new Error('Download failed');
+        return response.blob();
+      })
+      .then(blob => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        const filename = decodeURIComponent(downloadPath.split('/').pop() || 'download');
+
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Revoke the blob URL after download
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+      })
+      .catch(error => {
+        console.error('Blob download failed, falling back to window.open:', error);
+        // Fallback: open in new tab (browser will handle the download)
+        window.open(fullUrl, '_blank');
+      });
   };
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (

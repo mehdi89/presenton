@@ -50,10 +50,15 @@ export async function GET(
 
     // Return file with appropriate headers for download
     // Convert Buffer to Uint8Array for NextResponse
+    // Use RFC 5987 encoding for filenames with non-ASCII characters
+    const safeFilename = filename.replace(/[^\x20-\x7E]/g, '_'); // ASCII-safe fallback
+    const encodedFilename = encodeURIComponent(filename);
+
     return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        // RFC 5987: filename for ASCII, filename* for UTF-8
+        "Content-Disposition": `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
         "Content-Length": fileBuffer.length.toString(),
       },
     });
