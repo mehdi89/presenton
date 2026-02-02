@@ -71,7 +71,7 @@ const Header = ({
       const pptx_path = await PresentationGenerationApi.exportAsPPTX(pptx_model);
       if (pptx_path) {
         // window.open(pptx_path, '_self');
-        downloadLink(pptx_path);
+        await downloadLink(pptx_path);
       } else {
         throw new Error("No path returned from export");
       }
@@ -108,7 +108,7 @@ const Header = ({
       if (response.ok) {
         const { path: pdfPath } = await response.json();
         // window.open(pdfPath, '_blank');
-        downloadLink(pdfPath);
+        await downloadLink(pdfPath);
       } else {
         throw new Error("Failed to export PDF");
       }
@@ -123,10 +123,34 @@ const Header = ({
       setShowLoader(false);
     }
   };
-  const downloadLink = (downloadPath: string) => {
-    // window.location.href triggers download when server returns Content-Disposition: attachment
-    // The page doesn't navigate away - browser intercepts and shows download dialog
-    window.location.href = downloadPath;
+  const downloadLink = async (downloadPath: string) => {
+    try {
+      // Extract filename from URL or use default
+      const urlParts = downloadPath.split('/');
+      const filename = decodeURIComponent(urlParts[urlParts.length - 1]);
+      
+      // Fetch the file as a blob
+      const response = await fetch(downloadPath);
+      if (!response.ok) throw new Error('Download failed');
+      
+      const blob = await response.blob();
+      
+      // Create a temporary anchor element and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      // Fallback: open in new tab if blob download fails
+      window.open(downloadPath, '_blank');
+    }
   };
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
