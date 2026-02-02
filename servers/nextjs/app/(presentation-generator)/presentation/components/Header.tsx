@@ -124,20 +124,9 @@ const Header = ({
     }
   };
   const downloadLink = (downloadPath: string) => {
-    // Use a hidden iframe to trigger the download
-    // This bypasses popup blockers and works in async contexts
-    // because iframes with Content-Disposition: attachment trigger downloads
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = downloadPath;
-    document.body.appendChild(iframe);
-
-    // Clean up after download starts (give it time to initiate)
-    setTimeout(() => {
-      if (iframe.parentNode) {
-        iframe.parentNode.removeChild(iframe);
-      }
-    }, 10000); // 10 seconds to allow large file downloads to start
+    // window.location.href triggers download when server returns Content-Disposition: attachment
+    // The page doesn't navigate away - browser intercepts and shows download dialog
+    window.location.href = downloadPath;
   };
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
