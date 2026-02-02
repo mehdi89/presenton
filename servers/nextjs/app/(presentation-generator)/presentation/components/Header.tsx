@@ -124,22 +124,20 @@ const Header = ({
     }
   };
   const downloadLink = (downloadPath: string) => {
-    // Check if it's an external URL (blob storage) or local path
-    const isExternalUrl = downloadPath.startsWith('http://') || downloadPath.startsWith('https://');
+    // Use a hidden iframe to trigger the download
+    // This bypasses popup blockers and works in async contexts
+    // because iframes with Content-Disposition: attachment trigger downloads
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = downloadPath;
+    document.body.appendChild(iframe);
 
-    if (isExternalUrl) {
-      // For external URLs (blob storage), open in new tab to trigger download
-      // The blob has Content-Disposition: attachment header set
-      window.open(downloadPath, '_blank');
-    } else {
-      // For local paths, use anchor element with download attribute
-      const link = document.createElement('a');
-      link.href = downloadPath;
-      link.download = ''; // Let server's Content-Disposition set the filename
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    // Clean up after download starts (give it time to initiate)
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
+      }
+    }, 10000); // 10 seconds to allow large file downloads to start
   };
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
