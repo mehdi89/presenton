@@ -124,9 +124,22 @@ const Header = ({
     }
   };
   const downloadLink = (downloadPath: string) => {
-    // Use window.location for most reliable download trigger
-    // This works even after async operations because it's a navigation
-    window.location.href = downloadPath;
+    // Check if it's an external URL (blob storage) or local path
+    const isExternalUrl = downloadPath.startsWith('http://') || downloadPath.startsWith('https://');
+
+    if (isExternalUrl) {
+      // For external URLs (blob storage), open in new tab to trigger download
+      // The blob has Content-Disposition: attachment header set
+      window.open(downloadPath, '_blank');
+    } else {
+      // For local paths, use anchor element with download attribute
+      const link = document.createElement('a');
+      link.href = downloadPath;
+      link.download = ''; // Let server's Content-Disposition set the filename
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
