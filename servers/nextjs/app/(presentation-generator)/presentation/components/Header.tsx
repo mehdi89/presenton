@@ -124,34 +124,9 @@ const Header = ({
     }
   };
   const downloadLink = (downloadPath: string) => {
-    // Build the full URL
-    const fullUrl = new URL(downloadPath, window.location.origin).href;
-
-    // Method 1: Try using fetch + blob for reliable download
-    fetch(fullUrl)
-      .then(response => {
-        if (!response.ok) throw new Error('Download failed');
-        return response.blob();
-      })
-      .then(blob => {
-        const blobUrl = window.URL.createObjectURL(blob);
-        const filename = decodeURIComponent(downloadPath.split('/').pop() || 'download');
-
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        // Revoke the blob URL after download
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
-      })
-      .catch(error => {
-        console.error('Blob download failed, falling back to window.open:', error);
-        // Fallback: open in new tab (browser will handle the download)
-        window.open(fullUrl, '_blank');
-      });
+    // Use window.location for most reliable download trigger
+    // This works even after async operations because it's a navigation
+    window.location.href = downloadPath;
   };
 
   const MenuItems = ({ mobile }: { mobile: boolean }) => (
