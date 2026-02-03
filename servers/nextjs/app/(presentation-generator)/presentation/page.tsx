@@ -14,16 +14,30 @@ const page = () => {
   const returnUrl = params.get("returnUrl");
   const summaryId = params.get("summaryId");
   const mode = params.get("mode"); // "setup" | "present" | null
+  const stream = params.get("stream"); // "true" when slides are being generated
 
-  // Auto-detect setup mode when mode param is not provided
+  // If mode is explicit or stream=true (slides being generated), skip auto-detection
+  const skipDetection = !!mode || stream === "true";
+
+  // Auto-detect setup mode when no explicit mode or stream param
   const [detectedMode, setDetectedMode] = useState<"setup" | "present" | null>(
     mode as "setup" | "present" | null
   );
-  const [detecting, setDetecting] = useState(!mode && !!queryId);
+  const [detecting, setDetecting] = useState(!skipDetection && !!queryId);
 
   useEffect(() => {
-    if (mode || !queryId) return;
+    if (skipDetection || !queryId) {
+      // Update detectedMode when mode param changes (e.g., after redirect)
+      if (mode) {
+        setDetectedMode(mode as "setup" | "present");
+      } else if (stream === "true") {
+        setDetectedMode("present");
+      }
+      setDetecting(false);
+      return;
+    }
 
+    setDetecting(true);
     let cancelled = false;
     DashboardApi.getPresentation(queryId)
       .then((data) => {
@@ -41,7 +55,7 @@ const page = () => {
       });
 
     return () => { cancelled = true; };
-  }, [mode, queryId]);
+  }, [mode, queryId, skipDetection, stream]);
 
   if (!queryId) {
     return (
