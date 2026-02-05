@@ -5,11 +5,11 @@ import Header from "@/app/(presentation-generator)/dashboard/components/Header";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Presenton | Open Source AI presentation generator",
+  title: "TubeOnAI | AI Presentation Generator",
   description:
-    "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
+    "AI-powered presentation generator with custom layouts, multi-model support, and PDF/PPTX export.",
   alternates: {
-    canonical: "https://presenton.ai/create",
+    canonical: "https://slides.tubeonai.com/upload",
   },
   keywords: [
     "presentation generator",
@@ -24,20 +24,20 @@ export const metadata: Metadata = {
     "business presentations",
   ],
   openGraph: {
-    title: "Create Data Presentation | PresentOn",
+    title: "Create Presentation | TubeOnAI",
     description:
-      "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
+      "AI-powered presentation generator with custom layouts, multi-model support, and PDF/PPTX export.",
     type: "website",
-    url: "https://presenton.ai/create",
-    siteName: "PresentOn",
+    url: "https://slides.tubeonai.com/upload",
+    siteName: "TubeOnAI",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Create Data Presentation | PresentOn",
+    title: "Create Presentation | TubeOnAI",
     description:
-      "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
-    site: "@presenton_ai",
-    creator: "@presenton_ai",
+      "AI-powered presentation generator with custom layouts, multi-model support, and PDF/PPTX export.",
+    site: "@tubeonai",
+    creator: "@tubeonai",
   },
 };
 

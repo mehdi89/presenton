@@ -32,10 +32,10 @@ const roboto = Roboto({
 
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://presenton.ai"),
-  title: "Presenton - Open Source AI presentation generator",
+  metadataBase: new URL("https://slides.tubeonai.com"),
+  title: "TubeOnAI - AI Presentation Generator",
   description:
-    "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
+    "AI-powered presentation generator with custom layouts, multi-model support, and PDF/PPTX export.",
   keywords: [
     "AI presentation generator",
     "data storytelling",
@@ -47,31 +47,22 @@ export const metadata: Metadata = {
     "professional slides",
   ],
   openGraph: {
-    title: "Presenton - Open Source AI presentation generator",
+    title: "TubeOnAI - AI Presentation Generator",
     description:
-      "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
-    url: "https://presenton.ai",
-    siteName: "Presenton",
-    images: [
-      {
-        url: "https://presenton.ai/presenton-feature-graphics.png",
-        width: 1200,
-        height: 630,
-        alt: "Presenton Logo",
-      },
-    ],
+      "AI-powered presentation generator with custom layouts, multi-model support, and PDF/PPTX export.",
+    url: "https://slides.tubeonai.com",
+    siteName: "TubeOnAI",
     type: "website",
     locale: "en_US",
   },
   alternates: {
-    canonical: "https://presenton.ai",
+    canonical: "https://slides.tubeonai.com",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Presenton - Open Source AI presentation generator",
+    title: "TubeOnAI - AI Presentation Generator",
     description:
-      "Open-source AI presentation generator with custom layouts, multi-model support (OpenAI, Gemini, Ollama), and PDF/PPTX export. A free Gamma alternative.",
-    images: ["https://presenton.ai/presenton-feature-graphics.png"],
+      "AI-powered presentation generator with custom layouts, multi-model support, and PDF/PPTX export.",
   },
 };
 

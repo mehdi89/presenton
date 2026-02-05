@@ -300,7 +300,7 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
               </button>
             </ToolTip>
             <div className="h-6 w-px bg-gray-300" />
-            <span className="text-xl font-semibold text-gray-800">Presenton</span>
+            <img src="/tubeonai-logo.svg" alt="TubeOnAI" className="h-7" />
           </div>
           <div className="text-sm text-gray-500">
             Setup your presentation

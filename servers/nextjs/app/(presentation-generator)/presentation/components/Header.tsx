@@ -261,7 +261,7 @@ const Header = ({
               </button>
             </ToolTip>
             <div className="h-6 w-px bg-gray-300" />
-            <span className="text-xl font-semibold text-gray-800">Presenton</span>
+            <img src="/tubeonai-logo.svg" alt="TubeOnAI" className="h-7" />
           </div>
 
           {/* Desktop Menu */}

@@ -283,11 +283,11 @@ const ImageEditor = ({
           </SheetHeader>
 
           <div className="mt-6">
-            <Tabs defaultValue="generate" className="w-full" onValueChange={handleTabChange}>
-              <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-3 mx-auto">
-                <TabsTrigger className="font-medium" value="generate">
+            <Tabs defaultValue="upload" className="w-full" onValueChange={handleTabChange}>
+              <TabsList className="grid bg-blue-100 border border-blue-300 w-full grid-cols-2 mx-auto">
+                {/* <TabsTrigger className="font-medium" value="generate">
                   AI Generate
-                </TabsTrigger>
+                </TabsTrigger> */}
                 <TabsTrigger className="font-medium" value="upload">
                   Upload
                 </TabsTrigger>

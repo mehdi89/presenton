@@ -18,9 +18,9 @@ const Header = () => {
             {(pathname !== "/upload" && pathname !== "/dashboard") && <BackBtn />}
             <Link href="/dashboard" onClick={() => trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/dashboard" })}>
               <img
-                src="/logo-white.png"
-                alt="Presentation logo"
-                className="h-16"
+                src="/tubeonai-logo-white.svg"
+                alt="TubeOnAI"
+                className="h-10"
               />
             </Link>
           </div>
