@@ -238,21 +238,37 @@ const Header = ({
         <Announcement />
         <Wrapper className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <ToolTip content={returnUrl && summaryId ? "Back to Summaries" : "Back to Dashboard"}>
+            <ToolTip content="Back">
               <button
                 onClick={() => {
-                  if (returnUrl && summaryId) {
-                    const redirectUrl = `${returnUrl}/summaries/${summaryId}`;
-                    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: redirectUrl });
-                    // If in iframe, break out to parent; otherwise normal navigation
-                    if (window.self !== window.top) {
-                      window.top!.location.href = redirectUrl;
-                    } else {
-                      window.location.href = redirectUrl;
+                  // Extract domain from returnUrl and redirect to main page
+                  let redirectUrl = 'https://web.tubeonai.com';
+                  if (returnUrl) {
+                    try {
+                      const url = new URL(returnUrl);
+                      redirectUrl = url.origin;
+                    } catch {
+                      // If URL parsing fails, use default
                     }
+                  }
+                  // Previous logic - redirect to full summaries path:
+                  // if (returnUrl && summaryId) {
+                  //   const redirectUrl = `${returnUrl}/summaries/${summaryId}`;
+                  //   trackEvent(MixpanelEvent.Navigation, { from: pathname, to: redirectUrl });
+                  //   if (window.self !== window.top) {
+                  //     window.top!.location.href = redirectUrl;
+                  //   } else {
+                  //     window.location.href = redirectUrl;
+                  //   }
+                  // } else {
+                  //   trackEvent(MixpanelEvent.Navigation, { from: pathname, to: '/dashboard' });
+                  //   router.push('/dashboard');
+                  // }
+                  trackEvent(MixpanelEvent.Navigation, { from: pathname, to: redirectUrl });
+                  if (window.self !== window.top) {
+                    window.top!.location.href = redirectUrl;
                   } else {
-                    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: '/dashboard' });
-                    router.push('/dashboard');
+                    window.location.href = redirectUrl;
                   }
                 }}
                 className="text-gray-700 hover:text-[#2299DD] transition-colors"

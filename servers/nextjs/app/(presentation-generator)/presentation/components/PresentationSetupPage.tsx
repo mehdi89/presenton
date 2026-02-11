@@ -241,15 +241,31 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
 
   // Handle back button
   const handleBack = () => {
-    if (returnUrl && summaryId) {
-      const redirectUrl = `${returnUrl}/summaries/${summaryId}`;
-      if (window.self !== window.top) {
-        window.top!.location.href = redirectUrl;
-      } else {
-        window.location.href = redirectUrl;
+    // Extract domain from returnUrl and redirect to main page
+    let redirectUrl = 'https://web.tubeonai.com';
+    if (returnUrl) {
+      try {
+        const url = new URL(returnUrl);
+        redirectUrl = url.origin;
+      } catch {
+        // If URL parsing fails, use default
       }
+    }
+    // Previous logic - redirect to full summaries path:
+    // if (returnUrl && summaryId) {
+    //   const redirectUrl = `${returnUrl}/summaries/${summaryId}`;
+    //   if (window.self !== window.top) {
+    //     window.top!.location.href = redirectUrl;
+    //   } else {
+    //     window.location.href = redirectUrl;
+    //   }
+    // } else {
+    //   router.push("/dashboard");
+    // }
+    if (window.self !== window.top) {
+      window.top!.location.href = redirectUrl;
     } else {
-      router.push("/dashboard");
+      window.location.href = redirectUrl;
     }
   };
 
@@ -291,7 +307,7 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
       <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
         <Wrapper className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <ToolTip content={returnUrl && summaryId ? "Back to Summaries" : "Back to Dashboard"}>
+            <ToolTip content="Back">
               <button
                 onClick={handleBack}
                 className="text-gray-700 hover:text-[#2299DD] transition-colors"
