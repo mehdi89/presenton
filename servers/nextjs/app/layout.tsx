@@ -87,6 +87,20 @@ export default function RootLayout({
           </MixpanelInitializer>
         </Providers>
         <Toaster position="top-center" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('error', function(e) {
+                if (e.message && (e.message.includes('Loading chunk') || e.message.includes('ChunkLoadError'))) {
+                  if (!sessionStorage.getItem('chunk-reload')) {
+                    sessionStorage.setItem('chunk-reload', '1');
+                    window.location.reload();
+                  }
+                }
+              });
+            `,
+          }}
+        />
       </body>
     </html>
   );
