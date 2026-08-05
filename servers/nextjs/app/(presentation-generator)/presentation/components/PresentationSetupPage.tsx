@@ -13,8 +13,6 @@ import { toast } from "sonner";
 
 import OutlineContent from "../../outline/components/OutlineContent";
 import TemplateSelection from "../../outline/components/TemplateSelection";
-import { Template } from "../../outline/types/index";
-import TemplateService from "../../services/api/template";
 import { useOutlineManagement } from "../../outline/hooks/useOutlineManagement";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import {
@@ -49,7 +47,12 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
   );
 
   const [activeTab, setActiveTab] = useState<string>(TABS.OUTLINE);
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<{
+    id: string;
+    name: string;
+    source: "default" | "custom";
+    position: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Loading presentation...");
@@ -183,12 +186,6 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
       return;
     }
 
-    if (!selectedTemplate.slides || selectedTemplate.slides.length === 0) {
-      toast.error("Invalid template - no slide layouts found");
-      setActiveTab(TABS.TEMPLATE);
-      return;
-    }
-
     if (outlines.length === 0) {
       toast.error("No outlines available for generation");
       return;
@@ -198,24 +195,13 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
       setIsGenerating(true);
       setLoadingMessage("Preparing presentation...");
 
-      // Prepare layout data from selected template
-      const layoutData = {
-        name: selectedTemplate.name,
-        ordered: selectedTemplate.ordered,
-        slides: selectedTemplate.slides,
-      };
-
-      console.log("[PresentationSetupPage] Preparing with layout:", {
-        name: layoutData.name,
-        ordered: layoutData.ordered,
-        slidesCount: layoutData.slides?.length,
-      });
-
-      // Call prepare endpoint with selected template and outlines
+      // Call prepare endpoint with selected template id and outlines.
+      // The backend resolves the full TemplateV2 layout (and validates it
+      // has at least one slide layout) from this id server-side.
       await PresentationGenerationApi.presentationPrepare({
         presentation_id,
         outlines: outlines,
-        layout: layoutData,
+        layout: selectedTemplate.id,
         title: null, // Let backend use existing title
       });
 
@@ -240,18 +226,13 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
     }
   };
 
-  const handleSelectTemplate = async (template: {
+  const handleSelectTemplate = (template: {
     id: string;
     name: string;
     source: "default" | "custom";
     position: number;
   }) => {
-    try {
-      const fullTemplate = await TemplateService.getTemplateDetails(template.id);
-      setSelectedTemplate(fullTemplate as unknown as Template);
-    } catch (error) {
-      toast.error("Failed to load template details");
-    }
+    setSelectedTemplate(template);
   };
 
   // Handle back button
