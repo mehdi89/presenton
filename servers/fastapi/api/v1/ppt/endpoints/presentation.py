@@ -7,7 +7,7 @@ import os
 import random
 import re
 import traceback
-from typing import Annotated, Any, List, Optional, Tuple
+from typing import Annotated, Any, List, Literal, Optional, Tuple
 import dirtyjson
 from fastapi import (
     APIRouter,
@@ -1976,51 +1976,6 @@ async def update_presentation(
         **_presentation_response_data(presentation),
         slides=response_slides,
     )
-
-
-@PRESENTATION_ROUTER.post("/export/pptx", response_model=str)
-async def export_presentation_as_pptx(
-    pptx_model: Annotated[PptxPresentationModel, Body()],
-):
-    import re
-    from pathvalidate import sanitize_filename
-    from urllib.parse import quote
-
-    temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
-
-    pptx_creator = PptxPresentationCreator(pptx_model, temp_dir)
-    await pptx_creator.create_ppt()
-
-    export_directory = get_exports_directory()
-    # Generate unique filename with sanitized name
-    sanitized_name = sanitize_filename(pptx_model.name or str(uuid.uuid4()))
-    # Remove commas, semicolons, and other problematic characters
-    sanitized_name = re.sub(r'[,;\'\"&]', '', sanitized_name)
-    # Replace spaces and multiple underscores with single underscore
-    sanitized_name = re.sub(r'[\s_]+', '_', sanitized_name).strip('_')
-    if not sanitized_name:
-        sanitized_name = "presentation"
-    filename = f"{sanitized_name}_{uuid.uuid4().hex[:8]}.pptx"
-    pptx_path = os.path.join(export_directory, filename)
-    pptx_creator.save(pptx_path)
-
-    # Try to upload to Azure Blob Storage (for multi-replica support)
-    blob_service = get_blob_storage_service()
-    if blob_service.is_enabled:
-        try:
-            blob_url = blob_service.upload_export(pptx_path)
-            print(f"[PPTX Export] Uploaded to blob storage: {blob_url}")
-            # Clean up local file after successful upload
-            try:
-                os.remove(pptx_path)
-            except Exception:
-                pass
-            return blob_url
-        except Exception as e:
-            print(f"[PPTX Export] Blob upload failed, using local: {e}")
-
-    # Fallback: Return download URL with URL-encoded filename
-    return f"/api/download/{quote(filename)}"
 
 
 @PRESENTATION_ROUTER.post("/export", response_model=PresentationPathAndEditPath)
