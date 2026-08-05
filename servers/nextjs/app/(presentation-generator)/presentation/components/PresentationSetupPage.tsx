@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import OutlineContent from "../../outline/components/OutlineContent";
 import TemplateSelection from "../../outline/components/TemplateSelection";
 import { Template } from "../../outline/types/index";
+import TemplateService from "../../services/api/template";
 import { useOutlineManagement } from "../../outline/hooks/useOutlineManagement";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import {
@@ -239,6 +240,20 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
     }
   };
 
+  const handleSelectTemplate = async (template: {
+    id: string;
+    name: string;
+    source: "default" | "custom";
+    position: number;
+  }) => {
+    try {
+      const fullTemplate = await TemplateService.getTemplateDetails(template.id);
+      setSelectedTemplate(fullTemplate as unknown as Template);
+    } catch (error) {
+      toast.error("Failed to load template details");
+    }
+  };
+
   // Handle back button
   const handleBack = () => {
     // Extract domain from returnUrl and redirect to main page
@@ -356,6 +371,7 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
                       outlines={outlines}
                       isLoading={false}
                       isStreaming={false}
+                      statusMessage=""
                       activeSlideIndex={-1}
                       highestActiveIndex={outlines.length - 1}
                       onDragEnd={handleDragEnd}
@@ -378,8 +394,9 @@ const PresentationSetupPage: React.FC<PresentationSetupPageProps> = ({
                       </p>
                     </div>
                     <TemplateSelection
-                      selectedTemplate={selectedTemplate}
-                      onSelectTemplate={setSelectedTemplate}
+                      presentationId={presentation_id}
+                      selectedTemplateId={selectedTemplate?.id ?? null}
+                      onSelectTemplate={handleSelectTemplate}
                     />
                   </div>
                 </TabsContent>

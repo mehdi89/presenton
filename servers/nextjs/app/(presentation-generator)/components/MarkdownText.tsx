@@ -7,7 +7,7 @@ interface MarkdownTextProps {
   children: string | undefined | null;
   className?: string;
   style?: React.CSSProperties;
-  as?: keyof JSX.IntrinsicElements;
+  as?: keyof React.JSX.IntrinsicElements;
 }
 
 /**
