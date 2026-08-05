@@ -1,17 +1,24 @@
+import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
+import {
+  limitOutlines,
+  MAX_NUMBER_OF_SLIDES,
+} from "@/utils/presentationLimits";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export interface PresentationData {
   id: string;
+
   language: string;
-  layout: {
-    name: string;
-    ordered: boolean;
-    slides: any[];
-  };
+  layout: any;
   n_slides: number;
   title: string;
   slides: any;
+  theme: Theme | null;
+  version?: string;
+  components?: any;
+  fonts?: any;
+  structure?: any;
 }
 
 interface PresentationGenerationState {
@@ -55,7 +62,7 @@ const presentationGenerationSlice = createSlice({
       state.presentation_id = action.payload;
       state.error = null;
     },
-    // Slides rendereimport { useEffect } from "react"d
+    // Slides rendered
     setSlidesRendered: (state, action: PayloadAction<boolean>) => {
       state.isSlidesRendered = action.payload;
     },
@@ -73,11 +80,16 @@ const presentationGenerationSlice = createSlice({
     },
     // Set outlines
     setOutlines: (state, action: PayloadAction<{ content: string }[]>) => {
-      state.outlines = action.payload;
+      state.outlines = limitOutlines(action.payload);
     },
     // Set presentation data
     setPresentationData: (state, action: PayloadAction<PresentationData>) => {
       state.presentationData = action.payload;
+    },
+    updateTitle: (state, action: PayloadAction<string>) => {
+      if (state.presentationData) {
+        state.presentationData.title = action.payload;
+      }
     },
     deleteSlideOutline: (state, action: PayloadAction<{ index: number }>) => {
       if (state.outlines) {
@@ -93,6 +105,10 @@ const presentationGenerationSlice = createSlice({
       action: PayloadAction<{ slide: Slide; index: number }>
     ) => {
       if (state.presentationData?.slides) {
+        if (state.presentationData.slides.length >= MAX_NUMBER_OF_SLIDES) {
+          return;
+        }
+
         // Insert the new slide at the specified index
         state.presentationData.slides.splice(
           action.payload.index,
@@ -107,17 +123,93 @@ const presentationGenerationSlice = createSlice({
             index: idx,
           })
         );
+        state.presentationData.n_slides = state.presentationData.slides.length;
       }
     },
     deletePresentationSlide: (state, action: PayloadAction<number>) => {
-      if (state.presentationData) {
-        state.presentationData.slides.splice(action.payload, 1);
+      if (state.presentationData?.slides) {
+        const slides = state.presentationData.slides;
+        if (
+          slides.length <= 1 ||
+          action.payload < 0 ||
+          action.payload >= slides.length
+        ) {
+          return;
+        }
+
+        slides.splice(action.payload, 1);
         state.presentationData.slides = state.presentationData.slides.map(
           (slide: any, idx: number) => ({
             ...slide,
             index: idx,
           })
         );
+        state.presentationData.n_slides = state.presentationData.slides.length;
+      }
+    },
+    replaceSlidesWithBlankFallback: (
+      state,
+      action: PayloadAction<{ slideData: any }>
+    ) => {
+      if (state.presentationData) {
+        state.presentationData.slides = [
+          { ...action.payload.slideData, index: 0 },
+        ];
+        state.presentationData.n_slides = 1;
+      }
+    },
+    duplicatePresentationSlide: (
+      state,
+      action: PayloadAction<{ index: number; slideId: string }>
+    ) => {
+      if (state.presentationData?.slides) {
+        const slides = state.presentationData.slides;
+        if (slides.length >= MAX_NUMBER_OF_SLIDES) {
+          return;
+        }
+
+        const sourceSlide = slides[action.payload.index];
+        if (!sourceSlide) {
+          return;
+        }
+
+        const duplicatedSlide = {
+          ...JSON.parse(JSON.stringify(sourceSlide)),
+          id: action.payload.slideId,
+          index: action.payload.index + 1,
+        };
+
+        slides.splice(action.payload.index + 1, 0, duplicatedSlide);
+        state.presentationData.slides = slides.map((slide: any, idx: number) => ({
+          ...slide,
+          index: idx,
+        }));
+        state.presentationData.n_slides = state.presentationData.slides.length;
+      }
+    },
+    movePresentationSlide: (
+      state,
+      action: PayloadAction<{ fromIndex: number; toIndex: number }>
+    ) => {
+      if (state.presentationData?.slides) {
+        const slides = state.presentationData.slides;
+        const { fromIndex, toIndex } = action.payload;
+        if (
+          fromIndex === toIndex ||
+          fromIndex < 0 ||
+          toIndex < 0 ||
+          fromIndex >= slides.length ||
+          toIndex >= slides.length
+        ) {
+          return;
+        }
+
+        const [movedSlide] = slides.splice(fromIndex, 1);
+        slides.splice(toIndex, 0, movedSlide);
+        state.presentationData.slides = slides.map((slide: any, idx: number) => ({
+          ...slide,
+          index: idx,
+        }));
       }
     },
     updateSlide: (
@@ -130,6 +222,18 @@ const presentationGenerationSlice = createSlice({
       ) {
         state.presentationData.slides[action.payload.index] =
           action.payload.slide;
+      }
+    },
+    updateSlideUi: (
+      state,
+      action: PayloadAction<{ index: number; ui: Record<string, unknown> | null }>
+    ) => {
+      if (
+        state.presentationData &&
+        state.presentationData.slides[action.payload.index]
+      ) {
+        state.presentationData.slides[action.payload.index].ui =
+          action.payload.ui;
       }
     },
 
@@ -192,6 +296,10 @@ const presentationGenerationSlice = createSlice({
 
     addNewSlide: (state, action: PayloadAction<{ slideData: any; index: number }>) => {
       if (state.presentationData?.slides) {
+        if (state.presentationData.slides.length >= MAX_NUMBER_OF_SLIDES) {
+          return;
+        }
+
         // Insert the new slide at the specified index + 1 (after current slide)
         state.presentationData.slides.splice(action.payload.index + 1, 0, action.payload.slideData);
 
@@ -202,6 +310,7 @@ const presentationGenerationSlice = createSlice({
             index: idx,
           })
         );
+        state.presentationData.n_slides = state.presentationData.slides.length;
       }
     },
 
@@ -377,7 +486,13 @@ const presentationGenerationSlice = createSlice({
         }
       }
     },
+    updateTheme: (state, action: PayloadAction<Theme | null>) => {
+      if (state.presentationData) {
+        state.presentationData['theme'] = action.payload;
+      }
+    },
   },
+
 });
 
 export const {
@@ -391,16 +506,22 @@ export const {
   clearOutlines,
   deleteSlideOutline,
   setPresentationData,
+  updateTitle,
   setOutlines,
   // slides operations
   addSlide,
   updateSlide,
+  updateSlideUi,
   deletePresentationSlide,
+  replaceSlidesWithBlankFallback,
+  duplicatePresentationSlide,
+  movePresentationSlide,
   updateSlideContent,
   updateSlideImage,
   updateImageProperties,
   updateSlideIcon,
   addNewSlide,
+  updateTheme,
 } = presentationGenerationSlice.actions;
 
 export default presentationGenerationSlice.reducer;

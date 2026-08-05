@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime
 import uuid
 
@@ -9,6 +9,7 @@ from models.sql.slide import SlideModel
 
 class PresentationWithSlides(BaseModel):
     id: uuid.UUID
+    version: Optional[str] = None
     content: str
     n_slides: int
     language: str
@@ -19,3 +20,4 @@ class PresentationWithSlides(BaseModel):
     verbosity: Optional[str] = None
     outlines: Optional[dict] = None  # Outlines for setup mode
     slides: List[SlideModel]
+    fonts: Optional[Any] = None

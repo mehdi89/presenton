@@ -17,18 +17,18 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverlayLoader } from "@/components/ui/overlay-loader";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { setPresentationId } from "@/store/slices/presentationGeneration";
+import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { useDispatch, useSelector } from "react-redux";
 import { useRouter, usePathname } from "next/navigation";
 import { RootState } from "@/store/store";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import MarkdownRenderer from "./MarkdownRenderer";
+import { notify } from "@/components/ui/sonner";
 import { getIconFromFile } from "../../utils/others";
 import { ChevronRight, PanelRightOpen, X } from "lucide-react";
 import ToolTip from "@/components/ToolTip";
-import Header from "@/app/(presentation-generator)/dashboard/components/Header";
+import Header from "@/app/(presentation-generator)/(dashboard)/dashboard/components/Header";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { parseLimitedSlideCount } from "@/utils/presentationLimits";
 
 // Types
 interface LoadingState {
@@ -93,6 +93,10 @@ const DocumentsPreviewPage: React.FC = () => {
   };
 
   const readFile = async (filePath: string) => {
+    if (typeof window !== "undefined" && window.electron?.readFile) {
+      return window.electron.readFile(filePath);
+    }
+
     const res = await fetch(`/api/read-file`, {
       method: "POST",
       body: JSON.stringify({ filePath }),
@@ -128,7 +132,7 @@ const DocumentsPreviewPage: React.FC = () => {
         });
       } catch (error) {
         console.error("Error reading files:", error);
-        toast.error("Failed to read document content");
+        notify.error("Could not read document", "Failed to read document content.");
       }
       setDownloadingDocuments([]);
     }
@@ -147,10 +151,11 @@ const DocumentsPreviewPage: React.FC = () => {
         (fileItem: FileItem) => fileItem.file_path
       );
       trackEvent(MixpanelEvent.DocumentsPreview_Create_Presentation_API_Call);
-       const createResponse = await PresentationGenerationApi.createPresentation(
+      const createResponse = await PresentationGenerationApi.createPresentation(
         {
           content: config?.prompt ?? "",
-          n_slides: config?.slides ? parseInt(config.slides) : null,
+          version: "v2-standard",
+          n_slides: parseLimitedSlideCount(config?.slides),
           file_paths: documentPaths,
           language: config?.language ?? "",
           tone: config?.tone,
@@ -162,14 +167,13 @@ const DocumentsPreviewPage: React.FC = () => {
         }
       );
 
+      dispatch(clearOutlines());
       dispatch(setPresentationId(createResponse.id));
       trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/outline" });
       router.replace("/outline");
     } catch (error: any) {
       console.error("Error in radar presentation creation:", error);
-      toast.error("Error", {
-        description: error.message || "Error in radar presentation creation.",
-      });
+      notify.error("Creation failed", error.message || "Something went wrong while creating the presentation.");
       setShowLoading({
         message: "Error in radar presentation creation.",
         show: true,
@@ -210,9 +214,9 @@ const DocumentsPreviewPage: React.FC = () => {
             {downloadingDocuments.includes(selectedDocument) ? (
               <Skeleton className="w-full h-full" />
             ) : (
-              <MarkdownRenderer
-                content={textContents[selectedDocument] || ""}
-              />
+              <div className="whitespace-pre-wrap break-words text-sm leading-7 text-[#2E2E2E]">
+                {textContents[selectedDocument] || ""}
+              </div>
             )}
           </div>
         </div>
@@ -240,9 +244,8 @@ const DocumentsPreviewPage: React.FC = () => {
                 <div
                   key={key}
                   onClick={() => updateSelectedDocument(key)}
-                  className={`${
-                    selectedDocument === key ? "border border-blue-500" : ""
-                  } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
+                  className={`${selectedDocument === key ? "border border-blue-500" : ""
+                    } flex p-2 rounded-sm gap-2 items-center cursor-pointer`}
                 >
                   <img
                     className="h-6 w-6 border border-gray-200"

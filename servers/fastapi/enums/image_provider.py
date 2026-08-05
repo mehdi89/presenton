@@ -11,3 +11,5 @@ class ImageProvider(Enum):
     AZURE_DALLE = "azure-dall-e"
     AZURE_FLUX = "azure-flux"
     COMFYUI = "comfyui"
+    OPEN_WEBUI = "open_webui"
+    OPENAI_COMPATIBLE = "openai_compatible"

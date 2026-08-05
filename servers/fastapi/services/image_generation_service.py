@@ -3,9 +3,13 @@ import base64
 import io
 import json
 import os
+import secrets
+from weakref import WeakKeyDictionary
+
 import aiohttp
 from fastapi import HTTPException
 from google import genai
+from google.genai import types
 from openai import NOT_GIVEN, AsyncOpenAI
 from models.image_prompt import ImagePrompt
 from models.sql.image_asset import ImageAsset
@@ -23,6 +27,12 @@ from utils.get_env import (
     get_dall_e_3_quality_env,
     get_gpt_image_1_5_quality_env,
     get_pexels_api_key_env,
+    get_open_webui_image_url_env,
+    get_open_webui_image_api_key_env,
+    get_openai_compat_image_base_url_env,
+    get_openai_compat_image_api_key_env,
+    get_openai_compat_image_model_env,
+    is_parallel_image_generation_enabled,
 )
 from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
@@ -38,9 +48,30 @@ from utils.image_provider import (
     is_nanobanana_pro_selected,
     is_dalle3_selected,
     is_comfyui_selected,
+    is_open_webui_selected,
+    is_openai_compatible_selected,
 )
 from models.azure_model_config import is_azure_dalle_model
+from utils.asset_directory_utils import absolute_fastapi_asset_url
+from utils.image_generation_error import normalize_image_generation_error
 import uuid
+
+
+COMFYUI_MAX_SEED = 0xFFFFFFFFFFFFFFFF
+COMFYUI_SEED_SOURCE_VALUE_KEYS = {"value", "int", "integer", "number"}
+_IMAGE_GENERATION_LOCKS: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, asyncio.Lock
+] = WeakKeyDictionary()
+
+
+def _get_image_generation_lock() -> asyncio.Lock:
+    """Share one image request lock across presentation, editor, and chat services."""
+    loop = asyncio.get_running_loop()
+    lock = _IMAGE_GENERATION_LOCKS.get(loop)
+    if lock is None:
+        lock = asyncio.Lock()
+        _IMAGE_GENERATION_LOCKS[loop] = lock
+    return lock
 
 
 class ImageGenerationService:
@@ -72,6 +103,10 @@ class ImageGenerationService:
             return self.generate_image_azure_flux
         elif is_comfyui_selected():
             return self.generate_image_comfyui
+        elif is_open_webui_selected():
+            return self.generate_image_open_webui
+        elif is_openai_compatible_selected():
+            return self.generate_image_openai_compatible
         return None
 
     def is_stock_provider_selected(self):
@@ -88,11 +123,11 @@ class ImageGenerationService:
         """
         if self.is_image_generation_disabled:
             print("Image generation is disabled. Using placeholder image.")
-            return "/static/images/placeholder.jpg"
+            return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
 
         if not self.image_gen_func:
             print("No image generation function found. Using placeholder image.")
-            return "/static/images/placeholder.jpg"
+            return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
 
         image_prompt = prompt.get_image_prompt(
             with_theme=not self.is_stock_provider_selected()
@@ -100,12 +135,11 @@ class ImageGenerationService:
         print(f"Request - Generating Image for {image_prompt}")
 
         try:
-            if self.is_stock_provider_selected():
-                image_path = await self.image_gen_func(image_prompt)
+            if is_parallel_image_generation_enabled():
+                image_path = await self._call_image_provider(image_prompt)
             else:
-                image_path = await self.image_gen_func(
-                    image_prompt, self.output_directory
-                )
+                async with _get_image_generation_lock():
+                    image_path = await self._call_image_provider(image_prompt)
             if image_path:
                 # Blob URLs and stock provider URLs are returned directly
                 if image_path.startswith("http"):
@@ -120,11 +154,23 @@ class ImageGenerationService:
                             "theme_prompt": prompt.theme_prompt,
                         },
                     )
+                elif image_path.startswith("/app_data/") or image_path.startswith(
+                    "/static/"
+                ):
+                    return absolute_fastapi_asset_url(image_path)
             raise Exception(f"Image not found at {image_path}")
 
         except Exception as e:
             print(f"Error generating image: {e}")
-            return "/static/images/placeholder.jpg"
+            normalized_error = normalize_image_generation_error(e)
+            if normalized_error is e:
+                raise
+            raise normalized_error from e
+
+    async def _call_image_provider(self, image_prompt: str) -> str:
+        if self.is_stock_provider_selected():
+            return await self.image_gen_func(image_prompt)
+        return await self.image_gen_func(image_prompt, self.output_directory)
 
     async def generate_image_openai(
         self, prompt: str, output_directory: str, model: str, quality: str
@@ -306,6 +352,88 @@ class ImageGenerationService:
         print(f"Generated Azure FLUX image: {image_path}")
         return image_path
 
+    async def generate_image_open_webui(
+        self, prompt: str, output_directory: str
+    ) -> str:
+        base_url = get_open_webui_image_url_env()
+        if not base_url:
+            raise ValueError("OPEN_WEBUI_IMAGE_URL environment variable is not set")
+
+        base_url = base_url.rstrip("/")
+        api_key = get_open_webui_image_api_key_env() or ""
+
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        payload = {
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+        }
+
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            resp = await session.post(
+                f"{base_url}/images/generations",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=300),
+            )
+
+            if resp.status != 200:
+                error_text = await resp.text()
+                raise Exception(
+                    f"Open WebUI image generation returned {resp.status}: {error_text}"
+                )
+
+            body = await resp.json()
+
+            # Open WebUI returns a bare [...] array instead of {"data": [...]}.
+            if isinstance(body, list):
+                items = body
+            elif isinstance(body, dict) and "data" in body:
+                items = body["data"]
+            else:
+                raise Exception(f"Unexpected response format: {type(body)}")
+
+            if not items:
+                raise Exception("Open WebUI returned empty results")
+
+            item = items[0]
+            image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+
+            if item.get("b64_json"):
+                with open(image_path, "wb") as f:
+                    f.write(base64.b64decode(item["b64_json"]))
+            elif item.get("url"):
+                image_url = item["url"]
+                # Open WebUI returns relative URLs like /api/v1/files/.../content
+                if image_url.startswith("/"):
+                    image_url = origin + image_url
+                dl_headers = {}
+                if api_key:
+                    dl_headers["Authorization"] = f"Bearer {api_key}"
+                dl_resp = await session.get(
+                    image_url,
+                    headers=dl_headers,
+                    timeout=aiohttp.ClientTimeout(total=120),
+                )
+                if dl_resp.status != 200:
+                    raise Exception(
+                        f"Failed to download image: {dl_resp.status}"
+                    )
+                with open(image_path, "wb") as f:
+                    f.write(await dl_resp.read())
+            else:
+                raise Exception("Open WebUI returned no image data")
+
+        return image_path
+
     async def _generate_image_google(
         self, prompt: str, output_directory: str, model: str
     ) -> str:
@@ -314,29 +442,58 @@ class ImageGenerationService:
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model,
-            contents=[prompt],
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+            ),
         )
 
-        image_path = None
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                image = part.as_image()
+        # Latest SDK docs expose images in response.parts.
+        response_parts = getattr(response, "parts", None)
+        if not response_parts and getattr(response, "candidates", None):
+            first_candidate = response.candidates[0] if response.candidates else None
+            content = (
+                getattr(first_candidate, "content", None) if first_candidate else None
+            )
+            response_parts = getattr(content, "parts", None) if content else None
 
-                # Upload to blob storage if configured
-                if self.blob_storage.is_enabled:
-                    # Save to bytes buffer first
+        image_path = None
+        for part in response_parts or []:
+            if part.inline_data is not None:
+                mime_type = getattr(part.inline_data, "mime_type", "") or ""
+                ext = (
+                    mime_type.split("/")[-1]
+                    if mime_type.startswith("image/")
+                    else "png"
+                )
+
+                if hasattr(part, "as_image"):
+                    image = part.as_image()
                     buffer = io.BytesIO()
-                    image.save(buffer, format="JPEG")
-                    buffer.seek(0)
+                    image.save(buffer, format=image.format or "PNG")
+                    image_bytes = buffer.getvalue()
+                else:
+                    # Backward-compatible fallback if helper method is unavailable.
+                    raw_data = getattr(part.inline_data, "data", None)
+                    if raw_data is None:
+                        continue
+                    image_bytes = (
+                        base64.b64decode(raw_data)
+                        if isinstance(raw_data, str)
+                        else raw_data
+                    )
+
+                # Upload to blob storage if configured, otherwise save locally
+                if self.blob_storage.is_enabled:
                     blob_url = self.blob_storage.upload_bytes(
-                        buffer.read(), extension="jpg"
+                        image_bytes, extension=ext
                     )
                     print(f"Uploaded image to blob storage: {blob_url}")
                     return blob_url
 
-                # Otherwise save locally
-                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.jpg")
-                image.save(image_path)
+                image_path = os.path.join(output_directory, f"{uuid.uuid4()}.{ext}")
+                with open(image_path, "wb") as image_file:
+                    image_file.write(image_bytes)
 
         if not image_path:
             raise HTTPException(
@@ -348,9 +505,9 @@ class ImageGenerationService:
     async def generate_image_gemini_flash(
         self, prompt: str, output_directory: str
     ) -> str:
-        """Generate image using Gemini Flash (gemini-2.5-flash-image-preview)."""
+        """Generate image using Gemini Flash (gemini-2.5-flash-image)."""
         return await self._generate_image_google(
-            prompt, output_directory, "gemini-2.5-flash-image-preview"
+            prompt, output_directory, "gemini-2.5-flash-image"
         )
 
     async def generate_image_nanobanana_pro(
@@ -361,24 +518,92 @@ class ImageGenerationService:
             prompt, output_directory, "gemini-3-pro-image-preview"
         )
 
-    async def get_image_from_pexels(self, prompt: str) -> str:
-        async with aiohttp.ClientSession(trust_env=True) as session:
-            response = await session.get(
-                f"https://api.pexels.com/v1/search?query={prompt}&per_page=1",
-                headers={"Authorization": f"{get_pexels_api_key_env()}"},
-            )
-            data = await response.json()
-            image_url = data["photos"][0]["src"]["large"]
-            return image_url
+    async def get_image_from_pexels(
+        self, prompt: str, api_key: str | None = None, limit: int = 1
+    ) -> str | list[str]:
+        per_page = max(1, min(limit, 80))
+        resolved_api_key = (api_key or get_pexels_api_key_env() or "").strip()
 
-    async def get_image_from_pixabay(self, prompt: str) -> str:
         async with aiohttp.ClientSession(trust_env=True) as session:
             response = await session.get(
-                f"https://pixabay.com/api/?key={get_pixabay_api_key_env()}&q={prompt}&image_type=photo&per_page=3"
+                "https://api.pexels.com/v1/search",
+                params={"query": prompt, "per_page": per_page},
+                headers={"Authorization": resolved_api_key} if resolved_api_key else {},
+                timeout=aiohttp.ClientTimeout(total=20),
             )
+
+            if response.status in {401, 403}:
+                raise HTTPException(status_code=401, detail="Invalid Pexels API key")
+            if response.status != 200:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Pexels request failed: {error_text}",
+                )
+
             data = await response.json()
-            image_url = data["hits"][0]["largeImageURL"]
-            return image_url
+            photos = data.get("photos", [])
+            image_urls = [
+                photo.get("src", {}).get("large")
+                for photo in photos
+                if photo.get("src", {}).get("large")
+            ]
+
+            if limit <= 1:
+                return image_urls[0] if image_urls else ""
+            return image_urls[:limit]
+
+    async def get_image_from_pixabay(
+        self, prompt: str, api_key: str | None = None, limit: int = 1
+    ) -> str | list[str]:
+        per_page = max(3, min(limit, 200))
+        resolved_api_key = (api_key or get_pixabay_api_key_env() or "").strip()
+
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            response = await session.get(
+                "https://pixabay.com/api/",
+                params={
+                    "key": resolved_api_key,
+                    "q": prompt[:99],
+                    "image_type": "photo",
+                    "per_page": per_page,
+                },
+                timeout=aiohttp.ClientTimeout(total=20),
+            )
+
+            if response.status in {401, 403}:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Invalid Pixabay API key: {error_text}",
+                )
+            if response.status == 400:
+                error_text = await response.text()
+                if "api key" in error_text.lower():
+                    raise HTTPException(
+                        status_code=401,
+                        detail=f"Invalid Pixabay API key: {error_text}",
+                    )
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Pixabay request invalid: {error_text}",
+                )
+            if response.status != 200:
+                error_text = await response.text()
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Pixabay request failed: {error_text}",
+                )
+
+            data = await response.json()
+            hits = data.get("hits", [])
+            image_urls = [
+                hit.get("largeImageURL") for hit in hits if hit.get("largeImageURL")
+            ]
+
+            if limit <= 1:
+                return image_urls[0] if image_urls else ""
+            return image_urls[:limit]
 
     async def generate_image_comfyui(self, prompt: str, output_directory: str) -> str:
         """
@@ -420,6 +645,11 @@ class ImageGenerationService:
 
         # Find and update the positive prompt node
         workflow = self._inject_prompt_into_workflow(workflow, prompt)
+        randomized_seed_count = self._inject_random_seeds_into_workflow(workflow)
+        if randomized_seed_count:
+            print(
+                f"Randomized {randomized_seed_count} ComfyUI seed input(s) before submission"
+            )
 
         async with aiohttp.ClientSession(trust_env=True) as session:
             # Step 1: Submit workflow
@@ -440,27 +670,228 @@ class ImageGenerationService:
             return image_path
 
     def _inject_prompt_into_workflow(self, workflow: dict, prompt: str) -> dict:
-        """
-        Find the prompt node in the workflow and inject the prompt text.
-        Looks for a node with title 'Input Prompt' (case-insensitive).
+        node_index = self._build_comfyui_node_index(workflow)
 
-        User must rename their prompt node to 'Input Prompt' in ComfyUI.
-        """
-        for node_id, node_data in workflow.items():
-            meta = node_data.get("_meta", {})
-            title = meta.get("title", "").lower()
+        def norm(x) -> str:
+            return str(x or "").strip().lower()
 
-            if title == "input prompt":
-                if "inputs" in node_data and "text" in node_data["inputs"]:
-                    node_data["inputs"]["text"] = prompt
-                    print(
-                        f"Injected prompt into node {node_id}: {meta.get('title', '')}"
-                    )
-                    return workflow
+        def is_link(v) -> bool:
+            return (
+                isinstance(v, (list, tuple))
+                and len(v) >= 2
+                and isinstance(v[0], (str, int))
+                and isinstance(v[1], int)
+            )
+
+        preferred_keys = (
+            "text", "value", "prompt", "string", "content", "instruction", "input", "query"
+        )
+
+        # string inputs that are usually NOT prompt text
+        ignore_keys = {
+            "filename_prefix", "ckpt_name", "clip_name", "vae_name", "unet_name",
+            "sampler_name", "scheduler", "type", "device", "model", "lora_name"
+        }
+
+        visited = set()
+
+        def try_set(node_id: str) -> bool:
+            node_id = str(node_id)
+            if node_id in visited:
+                return False
+            visited.add(node_id)
+
+            node = node_index.get(node_id)
+            if not isinstance(node, dict):
+                return False
+
+            inputs = node.setdefault("inputs", {})
+
+            # 1) preferred prompt-like keys
+            for k in preferred_keys:
+                if k in inputs and isinstance(inputs[k], str):
+                    inputs[k] = prompt
+                    return True
+
+            # 2) fallback: exactly one unambiguous writable string field
+            string_candidates = [
+                k for k, v in inputs.items()
+                if isinstance(v, str) and k not in ignore_keys
+            ]
+            if len(string_candidates) == 1:
+                inputs[string_candidates[0]] = prompt
+                return True
+
+            # 3) follow links from ANY input key (node-type agnostic)
+            for v in inputs.values():
+                if is_link(v):
+                    if try_set(v[0]):
+                        return True
+                elif isinstance(v, list):
+                    for item in v:
+                        if is_link(item) and try_set(item[0]):
+                            return True
+
+            return False
+
+        input_prompt_nodes = [
+            node_id
+            for node_id, node_data in node_index.items()
+            if norm(node_data.get("_meta", {}).get("title")) == "input prompt"
+        ]
+
+        if not input_prompt_nodes:
+            raise ValueError(
+                "Could not find node with title 'Input Prompt'. Rename your prompt node to 'Input Prompt'."
+            )
+
+        for nid in input_prompt_nodes:
+            if try_set(nid):
+                return workflow
 
         raise ValueError(
-            "Could not find a node with title 'Input Prompt' in the workflow. Please rename your prompt node to 'Input Prompt' in ComfyUI."
+            "Found 'Input Prompt', but no writable prompt string field was found directly or through linked nodes."
         )
+
+    def _inject_random_seeds_into_workflow(self, workflow: dict) -> int:
+        """
+        Randomize ComfyUI seed inputs before submitting the workflow.
+
+        ComfyUI API-format workflows only include current widget values, not the
+        UI's control_after_generate setting. Randomizing numeric seed-like inputs
+        here gives each Presenton regeneration a new output for the same prompt.
+        """
+        node_index = self._build_comfyui_node_index(workflow)
+        randomized_inputs: set[tuple[int, str]] = set()
+        visited_objects: set[int] = set()
+        seed_update_count = 0
+
+        def randomize_input(inputs: dict, key: object) -> bool:
+            nonlocal seed_update_count
+
+            key_text = str(key)
+            marker = (id(inputs), key_text)
+            if marker in randomized_inputs:
+                return False
+
+            value = inputs.get(key)
+            if not self._is_comfyui_seed_value(value):
+                return False
+
+            new_seed = self._generate_comfyui_seed()
+            inputs[key] = str(new_seed) if isinstance(value, str) else new_seed
+            randomized_inputs.add(marker)
+            seed_update_count += 1
+            return True
+
+        def randomize_linked_seed_source(link: list | tuple) -> None:
+            source_node = node_index.get(str(link[0]))
+            if not isinstance(source_node, dict):
+                return
+
+            inputs = source_node.get("inputs")
+            if not isinstance(inputs, dict):
+                return
+
+            updated = False
+            for source_key in list(inputs.keys()):
+                if self._is_comfyui_seed_key(source_key):
+                    updated = randomize_input(inputs, source_key) or updated
+
+            if updated:
+                return
+
+            source_candidates = [
+                key
+                for key, value in inputs.items()
+                if self._normalize_comfyui_key(key) in COMFYUI_SEED_SOURCE_VALUE_KEYS
+                and self._is_comfyui_seed_value(value)
+            ]
+            if len(source_candidates) == 1:
+                randomize_input(inputs, source_candidates[0])
+
+        def walk(obj) -> None:
+            object_id = id(obj)
+            if object_id in visited_objects:
+                return
+            visited_objects.add(object_id)
+
+            if isinstance(obj, dict):
+                inputs = obj.get("inputs")
+                if isinstance(inputs, dict):
+                    for input_key, input_value in list(inputs.items()):
+                        if not self._is_comfyui_seed_key(input_key):
+                            continue
+                        if self._is_comfyui_link(input_value):
+                            randomize_linked_seed_source(input_value)
+                        else:
+                            randomize_input(inputs, input_key)
+
+                for value in obj.values():
+                    walk(value)
+            elif isinstance(obj, list):
+                for value in obj:
+                    walk(value)
+
+        walk(workflow)
+        return seed_update_count
+
+    def _build_comfyui_node_index(self, workflow: dict) -> dict[str, dict]:
+        node_index: dict[str, dict] = {}
+        visited_objects: set[int] = set()
+
+        def walk(obj) -> None:
+            object_id = id(obj)
+            if object_id in visited_objects:
+                return
+            visited_objects.add(object_id)
+
+            if isinstance(obj, dict):
+                if isinstance(obj.get("inputs"), dict):
+                    node_id = obj.get("id")
+                    if node_id is not None:
+                        node_index[str(node_id)] = obj
+
+                for key, value in obj.items():
+                    if isinstance(value, dict) and isinstance(value.get("inputs"), dict):
+                        node_index[str(key)] = value
+                    walk(value)
+            elif isinstance(obj, list):
+                for value in obj:
+                    walk(value)
+
+        walk(workflow)
+        return node_index
+
+    def _normalize_comfyui_key(self, key: object) -> str:
+        return str(key or "").strip().replace("-", "_").replace(" ", "_").lower()
+
+    def _is_comfyui_seed_key(self, key: object) -> bool:
+        normalized_key = self._normalize_comfyui_key(key).replace("_", "")
+        return normalized_key == "seed" or normalized_key.endswith("seed")
+
+    def _is_comfyui_seed_value(self, value: object) -> bool:
+        if isinstance(value, bool):
+            return False
+        if isinstance(value, int):
+            return True
+        if isinstance(value, str):
+            raw_value = value.strip()
+            return raw_value.isdigit() or (
+                raw_value.startswith("-") and raw_value[1:].isdigit()
+            )
+        return False
+
+    def _is_comfyui_link(self, value: object) -> bool:
+        return (
+            isinstance(value, (list, tuple))
+            and len(value) >= 2
+            and isinstance(value[0], (str, int))
+            and isinstance(value[1], int)
+        )
+
+    def _generate_comfyui_seed(self) -> int:
+        return secrets.randbelow(COMFYUI_MAX_SEED + 1)
 
     async def _submit_comfyui_workflow(
         self, session: aiohttp.ClientSession, comfyui_url: str, workflow: dict
@@ -493,7 +924,7 @@ class ImageGenerationService:
         session: aiohttp.ClientSession,
         comfyui_url: str,
         prompt_id: str,
-        timeout: int = 300,
+        timeout: int = 3000,
         poll_interval: int = 4,
     ) -> dict:
         """Poll ComfyUI history endpoint until workflow completes."""
@@ -601,4 +1032,66 @@ class ImageGenerationService:
                     else:
                         raise Exception(f"Failed to download image: {response.status}")
 
-        raise Exception("No images found in ComfyUI outputs")
+    async def generate_image_openai_compatible(
+        self, prompt: str, output_directory: str
+    ) -> str:
+        base_url = get_openai_compat_image_base_url_env()
+        api_key = get_openai_compat_image_api_key_env()
+        model = get_openai_compat_image_model_env()
+
+        if not base_url or not api_key or not model:
+            raise ValueError(
+                "OPENAI_COMPAT_IMAGE_BASE_URL, OPENAI_COMPAT_IMAGE_API_KEY and OPENAI_COMPAT_IMAGE_MODEL must be set."
+            )
+
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base_url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+
+        response = await client.images.generate(
+            model=model,
+            prompt=prompt,
+            n=1,
+            size="1024x1024",
+        )
+
+        item = response.data[0]
+        image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+
+        if item.b64_json:
+            with open(image_path, "wb") as f:
+                f.write(base64.b64decode(item.b64_json))
+        elif item.url:
+            image_url = item.url
+            is_relative_url = image_url.startswith("/")
+            if is_relative_url:
+                image_url = origin + image_url
+            image_origin = urlparse(image_url)
+            headers = {}
+            if (
+                is_relative_url
+                or (
+                    image_origin.scheme == parsed.scheme
+                    and image_origin.netloc == parsed.netloc
+                )
+            ):
+                headers["Authorization"] = f"Bearer {api_key}"
+            async with aiohttp.ClientSession(trust_env=True) as session:
+                dl_resp = await session.get(
+                    image_url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=120),
+                )
+                if dl_resp.status != 200:
+                    raise Exception(
+                        f"Failed to download image from OpenAI-compatible provider: {dl_resp.status}"
+                    )
+                with open(image_path, "wb") as f:
+                    f.write(await dl_resp.read())
+        else:
+            raise Exception("OpenAI-compatible provider returned no image data")
+
+        return image_path

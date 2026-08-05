@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect } from "react";
+import React, { memo, useCallback, useEffect } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,31 +9,70 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slide } from "../types/slide";
-import { useTemplateLayouts } from "../hooks/useTemplateLayouts";
-
+import SlideScale from "./PresentationRender";
 
 interface PresentationModeProps {
   slides: Slide[];
   currentSlide: number;
-
+  theme?: unknown;
+  fonts?: unknown;
   isFullscreen: boolean;
   onFullscreenToggle: () => void;
   onExit: () => void;
   onSlideChange: (slideNumber: number) => void;
 }
 
+const PresentationModeSlide = memo(
+  function PresentationModeSlide({
+    slide,
+    slideIndex,
+    theme,
+    fonts,
+  }: {
+    slide: Slide;
+    slideIndex: number;
+    theme?: unknown;
+    fonts?: unknown;
+  }) {
+    return (
+      <SlideScale
+        slide={slide}
+        theme={theme}
+        fonts={fonts}
+        isEditMode={false}
+        presentMode
+        isClickable={false}
+        renderIndex={slideIndex}
+      />
+    );
+  },
+  (previous, next) =>
+    previous.slide === next.slide &&
+    previous.slideIndex === next.slideIndex &&
+    previous.theme === next.theme &&
+    previous.fonts === next.fonts
+);
+
 const PresentationMode: React.FC<PresentationModeProps> = ({
 
   slides,
   currentSlide,
-
+  theme,
+  fonts,
   isFullscreen,
   onFullscreenToggle,
   onExit,
   onSlideChange,
 
+
 }) => {
-  const { renderSlideContent } = useTemplateLayouts();
+  const slideCount = Array.isArray(slides) ? slides.length : 0;
+  const activeSlideIndex = Math.min(
+    Math.max(currentSlide, 0),
+    Math.max(slideCount - 1, 0)
+  );
+  const activeSlide = slideCount > 0 ? slides[activeSlideIndex] : null;
+
   // Modify the handleKeyPress to prevent default behavior
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
@@ -43,17 +82,22 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
         case "ArrowRight":
         case "ArrowDown":
         case " ": // Space key
-          if (currentSlide < slides.length - 1) {
-            onSlideChange(currentSlide + 1);
+          if (activeSlideIndex < slideCount - 1) {
+            onSlideChange(activeSlideIndex + 1);
           }
           break;
         case "ArrowLeft":
         case "ArrowUp":
-          if (currentSlide > 0) {
-            onSlideChange(currentSlide - 1);
+          if (activeSlideIndex > 0) {
+            onSlideChange(activeSlideIndex - 1);
           }
           break;
         case "Escape":
+          // If fullscreen is active, only exit fullscreen on first ESC. Second ESC exits present mode.
+          if (document.fullscreenElement) {
+            void document.exitFullscreen().catch(() => undefined);
+            return;
+          }
           onExit();
           break;
         case "f":
@@ -62,7 +106,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
           break;
       }
     },
-    [currentSlide, slides.length, onSlideChange, onExit, onFullscreenToggle]
+    [activeSlideIndex, slideCount, onSlideChange, onExit, onFullscreenToggle]
   );
 
   // Add both keydown and keyup listeners
@@ -94,12 +138,12 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
     const windowWidth = window.innerWidth;
 
     if (clickX < windowWidth / 3) {
-      if (currentSlide > 0) {
-        onSlideChange(currentSlide - 1);
+      if (activeSlideIndex > 0) {
+        onSlideChange(activeSlideIndex - 1);
       }
     } else if (clickX > (windowWidth * 2) / 3) {
-      if (currentSlide < slides.length - 1) {
-        onSlideChange(currentSlide + 1);
+      if (activeSlideIndex < slideCount - 1) {
+        onSlideChange(activeSlideIndex + 1);
       }
     }
   };
@@ -116,9 +160,14 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
     return () => document.removeEventListener("keydown", handleEscKey);
   }, [isFullscreen, onFullscreenToggle]);
 
+  if (!activeSlide) {
+    return null;
+  }
+
   return (
     <div
-      className="fixed inset-0 bg-black flex flex-col"
+      className="fixed inset-0  flex flex-col"
+      style={{ backgroundColor: "var(--page-background-color,#c8c7c9)" }}
       tabIndex={0}
       onClick={handleSlideClick}
     >
@@ -128,6 +177,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
           <div className="presentation-controls absolute top-4 right-4 flex items-center gap-2 z-50">
             <Button
               variant="ghost"
+              style={{ color: "var(--text-body-color,#000000)" }}
               size="icon"
               onClick={(e) => {
                 e.stopPropagation();
@@ -143,6 +193,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
             </Button>
             <Button
               variant="ghost"
+              style={{ color: "var(--text-body-color,#000000)" }}
               size="icon"
               onClick={(e) => {
                 e.stopPropagation();
@@ -157,42 +208,54 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
           <div className="presentation-controls absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-4 z-50">
             <Button
               variant="ghost"
+              style={{ color: "var(--text-body-color,#000000)" }}
               size="icon"
               onClick={(e) => {
                 e.stopPropagation();
-                onSlideChange(currentSlide - 1);
+                onSlideChange(activeSlideIndex - 1);
               }}
-              disabled={currentSlide === 0}
+              disabled={activeSlideIndex === 0}
               className="text-white hover:bg-white/20"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ChevronLeft className="h-5 w-5" style={{ color: "var(--text-body-color,#000000)" }} />
             </Button>
-            <span className="text-white">
-              {currentSlide + 1} / {slides.length}
+            <span className="text-white"
+              style={{ color: "var(--text-body-color,#000000)" }}
+            >
+              {activeSlideIndex + 1} / {slideCount}
             </span>
             <Button
               variant="ghost"
+              style={{ color: "var(--text-body-color,#000000)" }}
               size="icon"
               onClick={(e) => {
                 e.stopPropagation();
-                onSlideChange(currentSlide + 1);
+                onSlideChange(activeSlideIndex + 1);
               }}
-              disabled={currentSlide === slides.length - 1}
+              disabled={activeSlideIndex === slideCount - 1}
               className="text-white hover:bg-white/20"
             >
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-5 w-5" style={{ color: "var(--text-body-color,#000000)" }} />
             </Button>
           </div>
         </>
       )}
 
-      {/* Current Slide */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div
-          className={`w-full max-w-[1280px] scale-110 aspect-video slide-theme slide-container border rounded-sm font-inter shadow-lg bg-white`}
-        >
-          {slides[currentSlide] &&
-            renderSlideContent(slides[currentSlide], false)}
+      {/* Active slide only */}
+      <div className={`flex-1 flex items-center justify-center ${isFullscreen ? "p-0" : "p-8"}`}>
+        <div className="w-full h-full flex items-center justify-center relative" >
+          <div
+            className={` rounded-sm font-inter relative w-full h-full flex items-center justify-center`}
+
+          >
+            <PresentationModeSlide
+              key={activeSlide.id ?? activeSlideIndex}
+              slide={activeSlide}
+              slideIndex={activeSlideIndex}
+              theme={theme}
+              fonts={fonts}
+            />
+          </div>
         </div>
       </div>
     </div>

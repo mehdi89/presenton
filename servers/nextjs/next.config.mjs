@@ -1,10 +1,18 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const nextjsRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig = {
   reactStrictMode: false,
   distDir: ".next-build",
-  
+  output: "standalone",
+  turbopack: {
+    root: nextjsRoot,
+  },
 
   // Rewrites for development - proxy requests to FastAPI backend
+  // (production routing is handled by nginx.conf instead)
   async rewrites() {
     return [
       {
@@ -21,6 +29,14 @@ const nextConfig = {
       },
     ];
   },
+  ...(process.env.NODE_ENV !== "production"
+    ? {
+        allowedDevOrigins: [
+          "127.0.0.1",
+          "localhost",
+        ],
+      }
+    : {}),
 
   images: {
     remotePatterns: [

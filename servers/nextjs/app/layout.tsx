@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Roboto, Instrument_Sans } from "next/font/google";
+import { Manrope, Syne, Unbounded } from "next/font/google";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 import { Providers } from "./providers";
 import MixpanelInitializer from "./MixpanelInitializer";
-import { LayoutProvider } from "./(presentation-generator)/context/LayoutContext";
 import { Toaster } from "@/components/ui/sonner";
 import RouteRestriction from "@/components/RouteRestriction";
 const inter = localFont({
@@ -18,18 +18,23 @@ const inter = localFont({
   variable: "--font-inter",
 });
 
-const instrument_sans = Instrument_Sans({
+const syne = Syne({
   subsets: ["latin"],
-  weight: ["400"],
-  variable: "--font-instrument-sans",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-syne",
 });
 
-const roboto = Roboto({
+const manrope = Manrope({
   subsets: ["latin"],
-  weight: ["400"],
-  variable: "--font-roboto",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-manrope",
 });
 
+const unbounded = Unbounded({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-unbounded",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://slides.tubeonai.com"),
@@ -74,16 +79,17 @@ export default function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        <link rel="preload" href="/Presenton_Splash.png" as="image" />
+      </head>
       <body
-        className={`${inter.variable} ${roboto.variable} ${instrument_sans.variable} antialiased`}
+        className={`${inter.variable} ${syne.variable} ${manrope.variable} ${unbounded.variable} antialiased`}
       >
         <Providers>
           <MixpanelInitializer>
-            <LayoutProvider>
-              <RouteRestriction>
-                {children}
-              </RouteRestriction>
-            </LayoutProvider>
+            <RouteRestriction>
+              {children}
+            </RouteRestriction>
           </MixpanelInitializer>
         </Providers>
         <Toaster position="top-center" />

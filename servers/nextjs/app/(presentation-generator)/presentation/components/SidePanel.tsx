@@ -1,9 +1,9 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { LayoutList, ListTree, PanelRightOpen, X } from "lucide-react";
-import ToolTip from "@/components/ToolTip";
-import { Button } from "@/components/ui/button";
+import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import { Plus } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
+import { v4 as uuidv4 } from "uuid";
 import { RootState } from "@/store/store";
 import {
   DndContext,
@@ -19,28 +19,48 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { setPresentationData } from "@/store/slices/presentationGeneration";
+import {
+  addNewSlide,
+  setPresentationData,
+} from "@/store/slices/presentationGeneration";
 import { SortableSlide } from "./SortableSlide";
-import { SortableListItem } from "./SortableListItem";
-import { useTemplateLayouts } from "../../hooks/useTemplateLayouts";
+import { Separator } from "@/components/ui/separator";
+import { notify } from "@/components/ui/sonner";
+import { usePathname } from "next/navigation";
+import NewSlide from "./NewSlide";
+import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
+import { SlideThumbnailCard } from "./SlideThumbnailCard";
+import {
+  BLANK_SLIDE_LAYOUT_GROUP,
+  BLANK_SLIDE_LAYOUT_ID,
+  createBlankPresentationSlide,
+  isTemplateFreePresentation,
+} from "../../_shared/blank-slide";
+import { MAX_NUMBER_OF_SLIDES } from "@/utils/presentationLimits";
 
 interface SidePanelProps {
   selectedSlide: number;
-  onSlideClick: (index: number) => void;
-  isMobilePanelOpen: boolean;
-  setIsMobilePanelOpen: (value: boolean) => void;
+  onSlideClick: (
+    index: number,
+    options?: {
+      promptOverlaySlideId?: string;
+      promptOverlayKind?: "blank" | "layout";
+    },
+  ) => void;
+  presentationId: string;
+
   loading: boolean;
 }
 
 const SidePanel = ({
   selectedSlide,
   onSlideClick,
-  isMobilePanelOpen,
-  setIsMobilePanelOpen,
+  presentationId,
+
   loading,
 }: SidePanelProps) => {
-  const [isOpen, setIsOpen] = useState(true);
-  const [active, setActive] = useState<"list" | "grid">("grid");
+  const pathname = usePathname();
+  const [showNewSlideSelection, setShowNewSlideSelection] = useState(false);
 
   const { presentationData, isStreaming } = useSelector(
     (state: RootState) => state.presentationGeneration
@@ -48,14 +68,62 @@ const SidePanel = ({
 
   const dispatch = useDispatch();
 
-  // Use the centralized group layouts hook
-  const { renderSlideContent } = useTemplateLayouts();
+  const lastSlideIndex = presentationData?.slides?.length
+    ? presentationData.slides.length - 1
+    : 0;
+  const lastSlide = presentationData?.slides?.[lastSlideIndex];
+  const lastSlideLayoutGroup =
+    typeof lastSlide?.layout_group === "string" ? lastSlide.layout_group : "";
+  const lastSlideLayoutTemplateId =
+    typeof lastSlide?.layout === "string" ? lastSlide.layout.split(":")[0] : "";
+  const lastSlideTemplateId = lastSlideLayoutGroup.startsWith("template-v2")
+    ? lastSlideLayoutGroup
+    : lastSlideLayoutGroup || lastSlideLayoutTemplateId;
+  const isTemplateFree = isTemplateFreePresentation(presentationData);
 
-  useEffect(() => {
-    if (window.innerWidth < 768) {
-      setIsOpen(isMobilePanelOpen);
+  const handleAddSlideClick = () => {
+    if (!presentationData?.slides?.length || isStreaming) return;
+
+    if (presentationData.slides.length >= MAX_NUMBER_OF_SLIDES) {
+      notify.warning(
+        "Slide limit reached",
+        `You can have up to ${MAX_NUMBER_OF_SLIDES} slides.`
+      );
+      return;
     }
-  }, [isMobilePanelOpen]);
+
+    if (isTemplateFree) {
+      const slideId = uuidv4();
+      const newIndex = lastSlideIndex + 1;
+      const blankSlide = createBlankPresentationSlide({
+        id: slideId,
+        index: newIndex,
+        presentationId,
+        templateId: BLANK_SLIDE_LAYOUT_GROUP,
+        isTemplateV2: true,
+      });
+
+      dispatch(
+        addNewSlide({
+          slideData: blankSlide,
+          index: lastSlideIndex,
+        })
+      );
+      trackEvent(MixpanelEvent.Presentation_Slide_Added, {
+        pathname,
+        presentation_id: presentationId,
+        inserted_after_index: lastSlideIndex,
+        template_id: BLANK_SLIDE_LAYOUT_GROUP,
+        layout_id: BLANK_SLIDE_LAYOUT_ID,
+        source: "blank_side_panel",
+        is_template_v2: true,
+      });
+      onSlideClick(newIndex);
+      return;
+    }
+
+    setShowNewSlideSelection(true);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -67,13 +135,6 @@ const SidePanel = ({
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-
-  const handleClose = () => {
-    setIsOpen(false);
-    if (window.innerWidth < 768) {
-      setIsMobilePanelOpen(false);
-    }
-  };
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
@@ -106,6 +167,13 @@ const SidePanel = ({
       dispatch(
         setPresentationData({ ...presentationData, slides: updatedArray })
       );
+      trackEvent(MixpanelEvent.Presentation_Slides_Reordered, {
+        pathname,
+        presentation_id: presentationId,
+        from_index: oldIndex,
+        to_index: newIndex,
+        slide_count: updatedArray.length,
+      });
     }
   };
 
@@ -119,197 +187,117 @@ const SidePanel = ({
     return null;
   }
 
-  return (
-    <>
-      {/* Desktop Toggle Button - Always visible when panel is closed */}
-      {!isOpen && (
-        <div className="hidden xl:block fixed left-4 top-1/2 -translate-y-1/2 z-50">
-          <ToolTip content="Open Panel">
-            <Button
-              onClick={() => setIsOpen(true)}
-              className="bg-white hover:bg-gray-50 shadow-lg"
-            >
-              <PanelRightOpen className="text-black" size={20} />
-            </Button>
-          </ToolTip>
-        </div>
-      )}
+  const shouldShowNewSlideModal =
+    showNewSlideSelection &&
+    !isTemplateFree &&
+    lastSlideTemplateId &&
+    typeof document !== "undefined";
 
-      {/* Mobile Toggle Button */}
-      {!isMobilePanelOpen && (
-        <div className="xl:hidden fixed left-4 bottom-4 z-50">
-          <ToolTip content="Show Panel">
-            <Button
-              onClick={() => setIsMobilePanelOpen(true)}
-              className="bg-[#2299DD] text-white p-3 rounded-full shadow-lg"
-            >
-              <PanelRightOpen className="text-white" size={20} />
-            </Button>
-          </ToolTip>
-        </div>
-      )}
-
-      <div
-        className={`
-          fixed xl:relative h-full z-50 xl:z-auto
-          transition-all duration-300 ease-in-out
-          ${isOpen ? "ml-0" : "-ml-[300px]"}
-          ${isMobilePanelOpen
-            ? "translate-x-0"
-            : "-translate-x-full xl:translate-x-0"
-          }
-        `}
-      >
+  const newSlideModal = shouldShowNewSlideModal
+    ? createPortal(
         <div
-
-          className="min-w-[300px] bg-white max-w-[300px] h-[calc(100vh-120px)]  rounded-[20px] hide-scrollbar overflow-hidden slide-theme shadow-xl"
+          className="fixed inset-0 z-[1000] overflow-y-auto bg-black/50 px-4 py-16"
+          onClick={() => setShowNewSlideSelection(false)}
         >
-          <div
-            className="sticky top-0 z-40  px-6 py-4"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center justify-start gap-4">
-                <ToolTip content="Image Preview">
-                  <Button
-                    className={`${active === "grid"
-                      ? "bg-[#2299DD] hover:bg-[#1a7ab8]"
-                      : "bg-white hover:bg-white"
-                      }`}
-                    onClick={() => {
-                      if (!isStreaming) {
-                        setActive("grid")
-                      }
-                    }}
-                  >
-                    <LayoutList
-                      className={`${active === "grid" ? "text-white" : "text-black"
-                        }`}
-                      size={20}
-                    />
-                  </Button>
-                </ToolTip>
-                <ToolTip content="List Preview">
-                  <Button
-                    className={`${active === "list"
-                      ? "bg-[#2299DD] hover:bg-[#1a7ab8]"
-                      : "bg-white hover:bg-white"
-                      }`}
-                    onClick={() => {
-                      if (!isStreaming) {
-                        setActive("list")
-                      }
-                    }}
-                  >
-                    <ListTree
-                      className={`${active === "list" ? "text-white" : "text-black"
-                        }`}
-                      size={20}
-                    />
-                  </Button>
-                </ToolTip>
-              </div>
-              <X
-                onClick={handleClose}
-                className="text-[#6c7081] cursor-pointer hover:text-gray-600"
-                size={20}
+          <div className="relative z-[1001] flex min-h-full items-start justify-center pt-10">
+            <div
+              className="w-full max-w-[675px]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <NewSlide
+                index={lastSlideIndex}
+                templateID={lastSlideTemplateId}
+                setShowNewSlideSelection={setShowNewSlideSelection}
+                presentationId={presentationId}
+                onSlideAdded={onSlideClick}
               />
             </div>
           </div>
+        </div>,
+        document.body
+      )
+    : null;
 
+  return (
+    <div className="px-4 w-[120px] h-full">
+      <div
+        className={`
+          relative  h-full z-50 xl:z-auto 
+          transition-all duration-300 ease-in-out
+        `}
+      >
+        <div className="w-full h-full hide-scrollbar overflow-hidden slide-theme flex flex-col">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
           >
-            {/* List Preview */}
-            {active === "list" && (
-              <div className="p-4 overflow-y-auto hide-scrollbar h-[calc(100%-100px)]">
-                {isStreaming ? (
-                  presentationData &&
-                  presentationData?.slides.map((slide: any, index: number) => (
-                    <div
-                      key={`${index}-${slide.type}-${slide.id}`}
-                      className={`p-3 cursor-pointer rounded-lg slide-box`}
-                    >
-                      <span className="font-medium slide-title">
-                        Slide {index + 1}
-                      </span>
-                      <p className="text-sm slide-description">
-                        {slide.content.title}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <SortableContext
-                    items={
-                      presentationData?.slides.map((slide: any) => slide.id!) || []
+            <div
+              data-slide-thumbnail-scroll-container="true"
+              className="overflow-y-auto w-full hide-scrollbar min-h-0 flex-1 space-y-3.5"
+            >
+              {isStreaming ? (
+                presentationData &&
+                presentationData?.slides.map((slide: any, index: number) => (
+                  <SlideThumbnailCard
+                    key={
+                      slide.id ??
+                      `${slide.type ?? "slide"}-${slide.index ?? index}`
                     }
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="space-y-2" id={`slide-${selectedSlide}`}>
-                      {presentationData &&
-                        presentationData?.slides.map((slide: any, index: number) => (
-                          <SortableListItem
-                            key={`${slide.id}-${index}`}
-                            slide={slide}
-                            index={index}
-                            selectedSlide={selectedSlide}
-                            onSlideClick={onSlideClick}
-                          />
-
-                        ))}
-                    </div>
-                  </SortableContext>
-                )}
-              </div>
-            )}
-
-            {/* Grid Preview */}
-            {active === "grid" && (
-              <div className="p-4 overflow-y-auto hide-scrollbar h-[calc(100%-100px)] space-y-4">
-                {isStreaming ? (
-                  presentationData &&
-                  presentationData?.slides.map((slide: any, index: number) => (
-                    <div
-                      key={`${slide.id}-${index}`}
-                      onClick={() => onSlideClick(index)}
-                      className={` cursor-pointer ring-2 p-1  rounded-md transition-all duration-200 ${selectedSlide === index ? ' ring-[#2299DD]' : 'ring-gray-200'
-                        }`}
-                    >
-                      <div className=" bg-white pointer-events-none  relative overflow-hidden aspect-video">
-                        <div className="absolute bg-gray-100/5 z-50  top-0 left-0 w-full h-full" />
-                        <div className="transform scale-[0.2] flex justify-center items-center origin-top-left  w-[500%] h-[500%]">
-                          {renderSlideContent(slide, false)}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <SortableContext
-                    items={
-                      presentationData?.slides.map((slide: any) => slide.id || `${slide.index}`) || []
-                    }
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {presentationData &&
-                      presentationData?.slides.map((slide: any, index: number) => (
+                    slide={slide}
+                    index={index}
+                    selected={selectedSlide === index}
+                    fonts={presentationData.fonts}
+                    presentationVersion={presentationData.version}
+                    onClick={() => onSlideClick(index)}
+                  />
+                ))
+              ) : (
+                <SortableContext
+                  items={
+                    presentationData?.slides.map(
+                      (slide: any) => slide.id || `${slide.index}`
+                    ) || []
+                  }
+                  strategy={verticalListSortingStrategy}
+                >
+                  {presentationData &&
+                    presentationData?.slides.map(
+                      (slide: any, index: number) => (
                         <SortableSlide
-                          key={`${slide.id}-${index}`}
+                          key={
+                            slide.id ??
+                            `${slide.type ?? "slide"}-${slide.index ?? index}`
+                          }
                           slide={slide}
                           index={index}
                           selectedSlide={selectedSlide}
+                          fonts={presentationData.fonts}
+                          presentationVersion={presentationData.version}
                           onSlideClick={onSlideClick}
-                          renderSlideContent={(slide) => renderSlideContent(slide, false)}
                         />
-                      ))}
-                  </SortableContext>
-                )}
-              </div>
-            )}
+                      )
+                    )}
+                </SortableContext>
+              )}
+            </div>
           </DndContext>
+          <Separator orientation="horizontal" className=" " />
+
+          <button
+            type="button"
+            onClick={handleAddSlideClick}
+            className="py-4 gap-2 flex flex-col duration-300 items-center justify-center rounded-lg cursor-pointer mx-auto"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-normal text-[#000000]">
+              Add Slide
+            </span>
+          </button>
         </div>
       </div>
-    </>
+      {newSlideModal}
+    </div>
   );
 };
 

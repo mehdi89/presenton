@@ -1,5 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+
+const SLIDES_SCROLL_CONTAINER_SELECTOR =
+  "[data-presentation-slides-scroll-container='true']";
 
 export const usePresentationNavigation = (
   presentationId: string,
@@ -18,7 +21,8 @@ export const usePresentationNavigation = (
     searchParams.get("slide") || `${selectedSlide}` || "0"
   );
 
-  // Helper to build URL with preserved params
+  // Helper to build URL with preserved params (keeps returnUrl/summaryId alive
+  // across present-mode navigation so the iframe back button still works).
   const buildUrl = useCallback((basePath: string, additionalParams: Record<string, string> = {}) => {
     let url = `${basePath}?id=${presentationId}`;
 
@@ -38,28 +42,72 @@ export const usePresentationNavigation = (
     return url;
   }, [presentationId, returnUrl, summaryId]);
 
-  const handleSlideClick = useCallback((index: number) => {
+  const scrollToSlide = useCallback((
+    index: number,
+    attempts = 2,
+    behavior: ScrollBehavior = "auto",
+  ) => {
     const slideElement = document.getElementById(`slide-${index}`);
     if (slideElement) {
-      slideElement.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-      setSelectedSlide(index);
-    }
-  }, [setSelectedSlide]);
+      const scrollContainer = slideElement.closest<HTMLElement>(
+        SLIDES_SCROLL_CONTAINER_SELECTOR
+      );
+      if (scrollContainer) {
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const slideRect = slideElement.getBoundingClientRect();
+        const top =
+          slideRect.top - containerRect.top + scrollContainer.scrollTop;
 
-  const toggleFullscreen = useCallback(() => {
+        scrollContainer.scrollTo({ top, behavior });
+        return;
+      }
+
+      slideElement.scrollIntoView({ behavior, block: "start" });
+      return;
+    }
+    if (attempts > 0) {
+      window.requestAnimationFrame(() =>
+        scrollToSlide(index, attempts - 1, behavior)
+      );
+    }
+  }, []);
+
+  const handleSlideClick = useCallback((index: number) => {
+    setSelectedSlide(index);
+    window.requestAnimationFrame(() => scrollToSlide(index, 2, "auto"));
+  }, [scrollToSlide, setSelectedSlide]);
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+    };
+  }, [setIsFullscreen]);
+
+  const toggleFullscreen = useCallback((target?: Element | null) => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
+      const fullscreenTarget =
+        target ?? document.getElementById("presentation-mode-wrapper") ?? document.documentElement;
+      fullscreenTarget
+        .requestFullscreen()
+        .then(() => setIsFullscreen(true))
+        .catch(() => setIsFullscreen(false));
     } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
+      document
+        .exitFullscreen()
+        .then(() => setIsFullscreen(false))
+        .catch(() => setIsFullscreen(Boolean(document.fullscreenElement)));
     }
   }, [setIsFullscreen]);
 
   const handlePresentExit = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => undefined);
+    }
     setIsFullscreen(false);
     router.push(buildUrl('/presentation'));
   }, [router, buildUrl, setIsFullscreen]);
@@ -80,9 +128,10 @@ export const usePresentationNavigation = (
     returnUrl,
     summaryId,
     currentSlide,
+    scrollToSlide,
     handleSlideClick,
     toggleFullscreen,
     handlePresentExit,
     handleSlideChange,
   };
-}; 
+};

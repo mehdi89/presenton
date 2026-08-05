@@ -18,6 +18,10 @@ def is_pixabay_selected() -> bool:
     return ImageProvider.PIXABAY == get_selected_image_provider()
 
 
+def is_openai_compatible_selected() -> bool:
+    return ImageProvider.OPENAI_COMPATIBLE == get_selected_image_provider()
+
+
 def is_gemini_flash_selected() -> bool:
     return ImageProvider.GEMINI_FLASH == get_selected_image_provider()
 
@@ -44,6 +48,10 @@ def is_azure_dalle_selected() -> bool:
 
 def is_azure_flux_selected() -> bool:
     return ImageProvider.AZURE_FLUX == get_selected_image_provider()
+
+
+def is_open_webui_selected() -> bool:
+    return ImageProvider.OPEN_WEBUI == get_selected_image_provider()
 
 
 def get_selected_image_provider() -> ImageProvider | None:

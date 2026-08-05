@@ -1,11 +1,18 @@
 import { useState, useCallback } from "react";
 import { useDispatch } from "react-redux";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { usePathname, useRouter } from "next/navigation";
+import { notify } from "@/components/ui/sonner";
 import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
-import { Template, LoadingState, TABS } from "../types/index";
+import { LoadingState } from "../types/index";
+
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
+import { sanitizeAnalyticsError } from "@/utils/analytics";
+import {
+  limitOutlines,
+  MAX_NUMBER_OF_SLIDES,
+} from "@/utils/presentationLimits";
+import { store } from "@/store/store";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -16,55 +23,78 @@ const DEFAULT_LOADING_STATE: LoadingState = {
 
 export const usePresentationGeneration = (
   presentationId: string | null,
-  outlines: { content: string }[] | null,
-  selectedTemplate: Template | null,
-  setActiveTab: (tab: string) => void
+  selectedTemplateId: string | null
 ) => {
   const dispatch = useDispatch();
   const router = useRouter();
-  const [loadingState, setLoadingState] = useState<LoadingState>(DEFAULT_LOADING_STATE);
+  const pathname = usePathname();
+  const [loadingState, setLoadingState] = useState<LoadingState>(
+    DEFAULT_LOADING_STATE
+  );
 
-  const validateInputs = useCallback(() => {
-    if (!outlines || outlines.length === 0) {
-      toast.error("No Outlines", {
-        description: "Please wait for outlines to load before generating presentation",
-      });
-      return false;
-    }
+  const validateInputs = useCallback(
+    (currentOutlines: { content: string }[] | null) => {
+      if (!currentOutlines || currentOutlines.length === 0) {
+        notify.warning(
+          "Outlines not ready",
+          "Please wait for your outlines to finish generating before continuing."
+        );
+        return false;
+      }
 
-    if (!selectedTemplate) {
-      toast.error("Select Layout Group", {
-        description: "Please select a layout group before generating presentation",
-      });
-      return false;
-    }
-    if (!selectedTemplate.slides.length) {
-      toast.error("No Slide Schema found", {
-        description: "Please select a Group before generating presentation",
-      });
-      return false;
-    }
+      if (!selectedTemplateId) {
+        notify.warning(
+          "Template not selected",
+          "Choose a template before generating your presentation."
+        );
+        return false;
+      }
 
-    return true;
-  }, [outlines, selectedTemplate]);
+      if (currentOutlines.length > MAX_NUMBER_OF_SLIDES) {
+        notify.warning(
+          "Slide limit reached",
+          `Use ${MAX_NUMBER_OF_SLIDES} or fewer outline slides before generating.`
+        );
+        return false;
+      }
 
-  const prepareLayoutData = useCallback(() => {
-    if (!selectedTemplate) return null;
-    return {
-      name: selectedTemplate.name,
-      ordered: selectedTemplate.ordered,
-      slides: selectedTemplate.slides
-    };
-  }, [selectedTemplate]);
+      return true;
+    },
+    [selectedTemplateId]
+  );
+
+  const clearTheme = () => {
+    const element = document.getElementById("presentation-page");
+    if (!element) return;
+    element.style.removeProperty("--primary-color");
+    element.style.removeProperty("--background-color");
+    element.style.removeProperty("--card-color");
+    element.style.removeProperty("--stroke");
+    element.style.removeProperty("--primary-text");
+    element.style.removeProperty("--background-text");
+    element.style.removeProperty("--graph-0");
+    element.style.removeProperty("--graph-1");
+    element.style.removeProperty("--graph-2");
+    element.style.removeProperty("--graph-3");
+    element.style.removeProperty("--graph-4");
+    element.style.removeProperty("--graph-5");
+    element.style.removeProperty("--graph-6");
+    element.style.removeProperty("--graph-7");
+    element.style.removeProperty("--graph-8");
+    element.style.removeProperty("--graph-9");
+  };
 
   const handleSubmit = useCallback(async () => {
-    if (!selectedTemplate) {
-      setActiveTab(TABS.LAYOUTS);
-      return;
-    }
-    if (!validateInputs()) return;
+    const latestOutlines = store.getState().presentationGeneration.outlines;
+    if (!validateInputs(latestOutlines)) return;
+    const preparedOutlines = limitOutlines(latestOutlines);
 
-
+    trackEvent(MixpanelEvent.Outline_Presentation_Generation_Started, {
+      pathname,
+      presentation_id: presentationId,
+      outline_count: preparedOutlines.length,
+      template_id: selectedTemplateId,
+    });
 
     setLoadingState({
       message: "Generating presentation data...",
@@ -74,29 +104,50 @@ export const usePresentationGeneration = (
     });
 
     try {
-      const layoutData = prepareLayoutData();
-
-      if (!layoutData) return;
-      trackEvent(MixpanelEvent.Presentation_Prepare_API_Call);
       const response = await PresentationGenerationApi.presentationPrepare({
         presentation_id: presentationId,
-        outlines: outlines,
-        layout: layoutData,
+        outlines: preparedOutlines,
+        layout: selectedTemplateId,
       });
 
       if (response) {
+        trackEvent(MixpanelEvent.TemplateV2_Prepare_Completed, {
+          presentation_id: presentationId,
+          template_id: selectedTemplateId,
+          outline_count: preparedOutlines.length,
+        });
         dispatch(clearPresentationData());
-        router.replace(`/presentation?id=${presentationId}&stream=true`);
+        clearTheme();
+        router.replace(
+          `/presentation?id=${presentationId}&stream=true&type=standard`
+        );
       }
     } catch (error: any) {
-      console.error('Error In Presentation Generation(prepare).', error);
-      toast.error("Generation Error", {
-        description: error.message || "Error In Presentation Generation(prepare).",
+      console.error("Error In Presentation Generation(prepare).", error);
+      trackEvent(MixpanelEvent.TemplateV2_Prepare_Failed, {
+        presentation_id: presentationId,
+        template_id: selectedTemplateId,
+        outline_count: preparedOutlines.length,
+        error_message: sanitizeAnalyticsError(
+          error,
+          "Error in presentation generation"
+        ),
       });
+      notify.error(
+        "Generation error",
+        error.message || "Error in presentation generation."
+      );
     } finally {
       setLoadingState(DEFAULT_LOADING_STATE);
     }
-  }, [validateInputs, prepareLayoutData, presentationId, outlines, dispatch, router, selectedTemplate]);
+  }, [
+    validateInputs,
+    presentationId,
+    dispatch,
+    router,
+    selectedTemplateId,
+    pathname,
+  ]);
 
   return { loadingState, handleSubmit };
-}; 
+};

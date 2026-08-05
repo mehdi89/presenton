@@ -1,144 +1,115 @@
 "use client";
-import React, { useEffect } from "react";
-import { useLayout } from "../../context/LayoutContext";
-import TemplateLayouts from "./TemplateLayouts";
 
-import { Template } from "../types/index";
+import React, { memo } from "react";
+import CreateCustomTemplate from "../../(dashboard)/templates/components/CreateCustomTemplate";
+import { useTemplateSummaries } from "../../hooks/useTemplateSummaries";
+import {
+  TemplateListCard,
+  TemplateListLoadingState,
+  TemplateListEmptyState,
+  TemplateListSection,
+} from "../../components/TemplateListUi";
+import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 
 interface TemplateSelectionProps {
-  selectedTemplate: Template | null;
-  onSelectTemplate: (template: Template) => void;
+  presentationId: string | null;
+  selectedTemplateId: string | null;
+  onSelectTemplate: (template: {
+    id: string;
+    name: string;
+    source: "default" | "custom";
+    position: number;
+  }) => void;
+  onCreateTemplate?: () => void;
 }
 
-const TemplateSelection: React.FC<TemplateSelectionProps> = ({
-  selectedTemplate,
-  onSelectTemplate
-}) => {
-  const {
-    getLayoutsByTemplateID,
-    getTemplateSetting,
-    getAllTemplateIDs,
-    loading
-  } = useLayout();
+const TemplateSelection: React.FC<TemplateSelectionProps> = memo(
+  function TemplateSelection({
+    presentationId,
+    selectedTemplateId,
+    onSelectTemplate,
+    onCreateTemplate,
+  }) {
+    const { defaultTemplates, customTemplates, loading } =
+      useTemplateSummaries();
 
-
-  const templates: Template[] = React.useMemo(() => {
-    const allTemplateIDs = getAllTemplateIDs();
-    if (allTemplateIDs.length === 0) return [];
-
-    // Filter to only built-in templates (exclude custom templates)
-    const builtInTemplates: Template[] = allTemplateIDs
-      .filter((templateID: string) => !templateID.toLowerCase().startsWith("custom-"))
-      .map(templateID => {
-        const settings = getTemplateSetting(templateID);
-        return {
-          id: templateID,
-          name: templateID,
-          description: settings?.description || `${templateID} presentation templates`,
-          ordered: settings?.ordered || false,
-          default: settings?.default || false,
-        };
-      });
-
-    // Sort templates to put default first, then by name
-    return builtInTemplates.sort((a, b) => {
-      if (a.default && !b.default) return -1;
-      if (!a.default && b.default) return 1;
-      return a.name.localeCompare(b.name);
-    });
-  }, [getAllTemplateIDs, getTemplateSetting]);
-
-  // Auto-select first template when templates are loaded
-  useEffect(() => {
-    if (templates.length > 0 && !selectedTemplate) {
-      const defaultTemplate = templates.find(g => g.default) || templates[0];
-      const slides = getLayoutsByTemplateID(defaultTemplate.id);
-
-      onSelectTemplate({
-        ...defaultTemplate,
-        slides: slides,
-      });
-    }
-  }, [templates, selectedTemplate, onSelectTemplate]);
-  useEffect(() => {
     if (loading) {
-      return;
+      return <TemplateListLoadingState />;
     }
-    const existingScript = document.querySelector(
-      'script[src*="tailwindcss.com"]'
+
+    const renderTemplateCard = (
+      template: (typeof defaultTemplates)[number],
+      index: number,
+      source: "default" | "custom"
+    ) => (
+      <TemplateListCard
+        key={template.id}
+        template={template}
+        isSelected={selectedTemplateId === template.id}
+        showArrow
+        selectionPage
+        onClick={() => {
+          trackEvent(MixpanelEvent.TemplateV2_Template_Selected, {
+            presentation_id: presentationId,
+            template_id: template.id,
+            template_source: source,
+          });
+          onSelectTemplate({
+            id: template.id,
+            name: template.name,
+            source,
+            position: index,
+          });
+        }}
+      />
     );
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.src = "https://cdn.tailwindcss.com";
-      script.async = true;
-      document.head.appendChild(script);
-    }
 
-  }, []);
-
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="p-4 rounded-lg border border-gray-200 bg-gray-50 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded mb-2"></div>
-              <div className="h-3 bg-gray-200 rounded mb-3"></div>
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                {[1, 2, 3].map((j) => (
-                  <div key={j} className="aspect-video bg-gray-200 rounded"></div>
-                ))}
-              </div>
+    if (customTemplates.length === 0) {
+      return (
+        <div className="mb-8">
+          <TemplateListSection label="Templates" selectionPage>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <CreateCustomTemplate
+                selectionPage
+                onClick={onCreateTemplate}
+              />
+              {defaultTemplates.map((template, index) =>
+                renderTemplateCard(template, index, "default")
+              )}
             </div>
-          ))}
+          </TemplateListSection>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (templates.length === 0) {
     return (
-      <div className="space-y-6">
-        <div className="text-center py-8">
-          <h5 className="text-lg font-medium mb-2 text-gray-700">
-            No Templates Available
-          </h5>
-          <p className="text-gray-600 text-sm">
-            No presentation templates could be loaded. Please try refreshing the page.
-          </p>
-        </div>
+      <div className="mb-8 space-y-[30px]">
+        <TemplateListSection label="Custom" selectionPage>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <CreateCustomTemplate
+              selectionPage
+              onClick={onCreateTemplate}
+            />
+            {customTemplates.map((template, index) =>
+              renderTemplateCard(template, index, "custom")
+            )}
+          </div>
+        </TemplateListSection>
+
+        <TemplateListSection label="Built-In" selectionPage>
+          {defaultTemplates.length === 0 ? (
+            <TemplateListEmptyState message="No built-in templates available." />
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {defaultTemplates.map((template, index) =>
+                renderTemplateCard(template, index, "default")
+              )}
+            </div>
+          )}
+        </TemplateListSection>
       </div>
     );
   }
+);
 
-  const handleTemplateSelection = (template: Template) => {
-    const slides = getLayoutsByTemplateID(template.id);
-    onSelectTemplate({
-      ...template,
-      slides: slides,
-    });
-  }
-
-  return (
-    <div className="space-y-8 mb-4">
-      {/* In Built Templates */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">In Built Templates</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {templates.map((template) => (
-            <TemplateLayouts
-              key={template.id}
-              template={template}
-              onSelectTemplate={handleTemplateSelection}
-              selectedTemplate={selectedTemplate}
-            />
-          ))}
-        </div>
-      </div>
-
-    </div>
-  );
-};
-
-export default TemplateSelection; 
+export default TemplateSelection;

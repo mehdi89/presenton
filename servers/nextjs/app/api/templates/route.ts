@@ -6,7 +6,13 @@ import { TemplateSetting } from '@/app/(presentation-generator)/template-preview
 export async function GET() {
     try {
         // Get the path to the presentation-templates directory
-        const templatesDirectory = path.join(process.cwd(), 'presentation-templates')
+        const templatesDirectory = path.join(process.cwd(), 'app', 'presentation-templates')
+
+        try {
+            await fs.access(templatesDirectory)
+        } catch {
+            return NextResponse.json([])
+        }
         
         // Read all directories in the presentation-templates directory
         const items = await fs.readdir(templatesDirectory, { withFileTypes: true })
@@ -46,7 +52,9 @@ export async function GET() {
                     settings = {
                         description: `${templateName} presentation layouts`,
                         ordered: false,
-                        default: false
+                        default: false,
+                        icon_type: 'bold',
+                        icon_weight: 'bold'
                     }
                    
                 }
@@ -74,4 +82,4 @@ export async function GET() {
             { status: 500 }
         )
     }
-} 
+}

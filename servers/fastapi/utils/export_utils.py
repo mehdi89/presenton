@@ -1,85 +1,75 @@
-import json
 import os
-import re
-import aiohttp
+import logging
 from typing import Literal
+from urllib.parse import urlencode
 import uuid
-from fastapi import HTTPException
+
 from pathvalidate import sanitize_filename
-from urllib.parse import quote
 
-from models.pptx_models import PptxPresentationModel
 from models.presentation_and_path import PresentationAndPath
-from services.pptx_presentation_creator import PptxPresentationCreator
-from services.temp_file_service import TEMP_FILE_SERVICE
-from utils.asset_directory_utils import get_exports_directory
+from utils.filename_utils import safe_export_basename
+from services.export_task_service import EXPORT_TASK_SERVICE
+from utils.runtime_limits import log_memory
 
 
-def clean_filename(title: str) -> str:
-    """Sanitize and clean a filename for safe filesystem and URL use."""
-    sanitized = sanitize_filename(title or str(uuid.uuid4()))
-    # Remove commas, semicolons, and other problematic characters
-    sanitized = re.sub(r'[,;\'\"&]', '', sanitized)
-    # Replace spaces and multiple underscores with single underscore
-    sanitized = re.sub(r'[\s_]+', '_', sanitized).strip('_')
-    if not sanitized:
-        sanitized = "presentation"
-    return sanitized
+LOGGER = logging.getLogger(__name__)
+
+
+def _get_next_public_url() -> str:
+    return (os.getenv("NEXT_PUBLIC_URL") or "").strip() or "http://127.0.0.1"
+
+
+def _get_next_public_fastapi_url() -> str | None:
+    value = (os.getenv("NEXT_PUBLIC_FAST_API") or "").strip()
+    return value or None
+
+
+def _build_presentation_export_url(
+    presentation_id: uuid.UUID, cookie_header: str | None = None
+) -> tuple[str, str | None]:
+    params = {"id": str(presentation_id)}
+    fastapi_url = _get_next_public_fastapi_url()
+    if fastapi_url:
+        params["fastapiUrl"] = fastapi_url
+    export_url = f"{_get_next_public_url().rstrip('/')}/pdf-maker?{urlencode(params)}"
+    if cookie_header:
+        export_url = f"{export_url}#{urlencode({'exportCookie': cookie_header})}"
+    return (
+        export_url,
+        fastapi_url,
+    )
 
 
 async def export_presentation(
-    presentation_id: uuid.UUID, title: str, export_as: Literal["pptx", "pdf"]
+    presentation_id: uuid.UUID,
+    title: str,
+    export_as: Literal["pptx", "pdf"],
+    cookie_header: str | None = None,
 ) -> PresentationAndPath:
-    if export_as == "pptx":
-
-        # Get the converted PPTX model from the Next.js service
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"http://localhost/api/presentation_to_pptx_model?id={presentation_id}"
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    print(f"Failed to get PPTX model: {error_text}")
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Failed to convert presentation to PPTX model",
-                    )
-                pptx_model_data = await response.json()
-
-        # Create PPTX file using the converted model
-        pptx_model = PptxPresentationModel(**pptx_model_data)
-        temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
-        pptx_creator = PptxPresentationCreator(pptx_model, temp_dir)
-        await pptx_creator.create_ppt()
-
-        export_directory = get_exports_directory()
-        cleaned_title = clean_filename(title)
-        filename = f"{cleaned_title}_{uuid.uuid4().hex[:8]}.pptx"
-        pptx_path = os.path.join(
-            export_directory,
-            filename,
-        )
-        pptx_creator.save(pptx_path)
-
-        # Return download URL with URL-encoded filename
-        download_url = f"/api/download/{quote(filename)}"
-
-        return PresentationAndPath(
-            presentation_id=presentation_id,
-            path=download_url,
-        )
-    else:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "http://localhost/api/export-as-pdf",
-                json={
-                    "id": str(presentation_id),
-                    "title": clean_filename(title),
-                },
-            ) as response:
-                response_json = await response.json()
-
-        return PresentationAndPath(
-            presentation_id=presentation_id,
-            path=response_json["path"],
-        )
+    log_memory(
+        LOGGER,
+        "presentation.export.start",
+        presentation_id=str(presentation_id),
+        export_as=export_as,
+    )
+    export_url, fastapi_url = _build_presentation_export_url(
+        presentation_id, cookie_header
+    )
+    name = (title or "").strip() or str(uuid.uuid4())
+    export_result = await EXPORT_TASK_SERVICE.export_from_url(
+        url=export_url,
+        title=safe_export_basename(sanitize_filename(name)),
+        export_as=export_as,
+        fastapi_url=fastapi_url,
+        cookie_header=cookie_header,
+    )
+    log_memory(
+        LOGGER,
+        "presentation.export.finish",
+        presentation_id=str(presentation_id),
+        export_as=export_as,
+    )
+    return PresentationAndPath(
+        presentation_id=presentation_id,
+        path=export_result.path,
+    )

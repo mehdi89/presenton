@@ -1,6 +1,7 @@
 from copy import deepcopy
 from typing import Any, List
 
+from jsonschema.validators import validator_for
 from openai import NOT_GIVEN
 
 from utils.dict_utils import (
@@ -134,11 +135,25 @@ def ensure_strict_json_schema(
 
     # arrays
     # { 'type': 'array', 'items': {...} }
+    # OpenAI requires array schemas to have "items". Zod tuples may emit prefixItems only.
     items = json_schema.get("items")
     if isinstance(items, dict):
         json_schema["items"] = ensure_strict_json_schema(
             items, path=(*path, "items"), root=root
         )
+    elif typ == "array":
+        prefix_items = json_schema.get("prefixItems")
+        if (
+            isinstance(prefix_items, list)
+            and len(prefix_items) > 0
+            and isinstance(prefix_items[0], dict)
+        ):
+            json_schema["items"] = ensure_strict_json_schema(
+                prefix_items[0], path=(*path, "items"), root=root
+            )
+            json_schema.pop("prefixItems", None)
+        else:
+            json_schema["items"] = {"type": "string"}
 
     # unions
     any_of = json_schema.get("anyOf")
@@ -219,66 +234,79 @@ def resolve_ref(*, root: dict[str, object], ref: str) -> object:
     return resolved
 
 
-# Flattens a JSON schema by inlining all $ref references and removing $defs/definitions
-def flatten_json_schema(schema: dict) -> dict:
-    root_schema = deepcopy(schema)
+def ensure_array_schemas_have_items(schema: dict) -> dict[str, Any]:
+    """
+    Recursively ensure every JSON schema node with type="array" has an "items" key.
+    Codex Responses API requires array schemas to specify items. Mutates a deep copy.
+    """
+    result = deepcopy(schema)
 
-    def _flatten(node: Any) -> Any:
+    def _is_array_schema_type(type_value: Any) -> bool:
+        if type_value == "array":
+            return True
+        if isinstance(type_value, list):
+            return "array" in type_value
+        return False
+
+    def _ensure(node: Any) -> Any:
         if isinstance(node, dict):
-            # If node is a pure $ref (or combined with extra fields), inline it
-            if "$ref" in node:
-                ref_value = node["$ref"]
-                assert isinstance(
-                    ref_value, str
-                ), f"Received non-string $ref - {ref_value}"
-                resolved = resolve_ref(root=root_schema, ref=ref_value)
-                assert isinstance(
-                    resolved, dict
-                ), f"Expected `$ref: {ref_value}` to resolve to a dictionary but got {type(resolved)}"
-                # Merge: referenced first, then overlay current (excluding $ref)
-                merged: dict[str, Any] = deepcopy(resolved)
-                for key, value in node.items():
-                    if key == "$ref":
-                        continue
-                    merged[key] = value
-                return _flatten(merged)
-
-            flattened: dict[str, Any] = {}
-            for key, value in node.items():
-                # Drop defs/definitions in output
-                if key in ("$defs", "definitions"):
-                    continue
-                if key == "properties" and isinstance(value, dict):
-                    flattened[key] = {
-                        prop_key: _flatten(prop_val)
-                        for prop_key, prop_val in value.items()
-                    }
-                elif key in ("items", "contains", "additionalProperties", "not"):
-                    if isinstance(value, dict):
-                        flattened[key] = _flatten(value)
-                    elif isinstance(value, list):
-                        flattened[key] = [_flatten(v) for v in value]
-                    else:
-                        flattened[key] = value
-                elif key in ("allOf", "anyOf", "oneOf", "prefixItems") and isinstance(
-                    value, list
-                ):
-                    flattened[key] = [_flatten(v) for v in value]
-                else:
-                    flattened[key] = (
-                        _flatten(value) if isinstance(value, (dict, list)) else value
-                    )
-            return flattened
-        if isinstance(node, list):
-            return [_flatten(v) for v in node]
+            if _is_array_schema_type(node.get("type")) and "items" not in node:
+                node["items"] = {"type": "string"}
+            for key, value in list(node.items()):
+                node[key] = _ensure(value)
+        elif isinstance(node, list):
+            for idx, value in enumerate(node):
+                node[idx] = _ensure(value)
         return node
 
-    result = _flatten(schema)
-    # Ensure top-level cleanup just in case
-    if isinstance(result, dict):
-        result.pop("$defs", None)
-        result.pop("definitions", None)
-    return result
+    return _ensure(result)
+
+
+def prepare_schema_for_validation(
+    schema: dict,
+    strict: bool = False,
+) -> dict[str, Any]:
+    prepared_schema = deepcopy(schema)
+    if strict:
+        prepared_schema = ensure_strict_json_schema(
+            prepared_schema,
+            path=(),
+            root=prepared_schema,
+        )
+    return ensure_array_schemas_have_items(prepared_schema)
+
+
+def format_json_path(path: List[Any]) -> str:
+    if not path:
+        return "$"
+
+    formatted = "$"
+    for part in path:
+        if isinstance(part, int):
+            formatted += f"[{part}]"
+        else:
+            formatted += f".{part}"
+    return formatted
+
+
+def get_schema_validation_errors(
+    schema: dict,
+    instance: Any,
+    strict: bool = False,
+) -> List[str]:
+    prepared_schema = prepare_schema_for_validation(schema, strict=strict)
+    validator_cls = validator_for(prepared_schema)
+    validator_cls.check_schema(prepared_schema)
+    validator = validator_cls(prepared_schema)
+
+    errors = sorted(
+        validator.iter_errors(instance),
+        key=lambda error: (format_json_path(list(error.path)), error.message),
+    )
+
+    return [
+        f"{format_json_path(list(error.path))}: {error.message}" for error in errors
+    ]
 
 
 def remove_titles_from_schema(schema: dict) -> dict[str, Any]:

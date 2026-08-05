@@ -34,8 +34,8 @@ export default function RouteRestriction({ children }: RouteRestrictionProps) {
     '/presentation',
     '/api/download',
     '/pdf-maker',
-    '/api/export-as-pdf',
-    '/api/presentation_to_pptx_model',
+    '/api/export-presentation',
+    '/api/export-presentation-data',
   ]
 
   // Check if current path starts with any allowed route
