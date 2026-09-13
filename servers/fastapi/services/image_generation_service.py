@@ -1051,6 +1051,15 @@ class ImageGenerationService:
 
         client = AsyncOpenAI(base_url=base_url, api_key=api_key)
 
+        if os.getenv("LLM") == "litellm" and model == "gpt-5.6-luna":
+            from utils.hosted_image import generate_hosted_image
+
+            data = await generate_hosted_image(client, model, prompt)
+            image_path = os.path.join(output_directory, f"{uuid.uuid4()}.png")
+            with open(image_path, "wb") as f:
+                f.write(data)
+            return image_path
+
         response = await client.images.generate(
             model=model,
             prompt=prompt,
