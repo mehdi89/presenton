@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import threading
 from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
 from typing import Any, Optional
@@ -81,6 +82,15 @@ def get_generate_kwargs(
         kwargs["tools"] = tools
     if response_format is not None:
         kwargs["response_format"] = response_format
+        if os.getenv("LLM") == "litellm" and model == "gpt-5.6-luna":
+            schema = getattr(response_format, "json_schema", None)
+            if schema is not None:
+                kwargs["messages"].append(UserMessage(content=(
+                    "Return only one JSON object matching this schema. "
+                    "Put any requested Markdown inside the appropriate JSON string fields; "
+                    "do not return a bare Markdown document or code fences. Schema: "
+                    + json.dumps(schema, separators=(",", ":"))
+                )))
 
     extra_body = get_extra_body(uses_tool_choice=bool(tools or response_format))
     if extra_body:
@@ -146,15 +156,24 @@ async def generate_structured_with_schema_retries(
         content: Optional[dict] = None
         for attempt in range(3):
             await _raise_if_client_disconnected(disconnect_checker)
-            content = await _generate_structured_content(
-                client,
-                disconnect_checker=disconnect_checker,
-                **get_generate_kwargs(
-                    model=model,
-                    messages=working_messages,
-                    response_format=response_format,
-                ),
-            )
+            try:
+                content = await _generate_structured_content(
+                    client,
+                    disconnect_checker=disconnect_checker,
+                    **get_generate_kwargs(
+                        model=model,
+                        messages=working_messages,
+                        response_format=response_format,
+                    ),
+                )
+            except Exception as exc:
+                # llmai parses before returning content and wraps JSON errors.
+                cause = getattr(exc, "cause", None)
+                if not isinstance(exc, json.JSONDecodeError) and not isinstance(cause, json.JSONDecodeError):
+                    raise
+                if attempt == 2:
+                    raise
+                content = None
             if content is not None:
                 break
             if attempt < 2:
