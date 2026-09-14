@@ -156,15 +156,24 @@ async def generate_structured_with_schema_retries(
         content: Optional[dict] = None
         for attempt in range(3):
             await _raise_if_client_disconnected(disconnect_checker)
-            content = await _generate_structured_content(
-                client,
-                disconnect_checker=disconnect_checker,
-                **get_generate_kwargs(
-                    model=model,
-                    messages=working_messages,
-                    response_format=response_format,
-                ),
-            )
+            try:
+                content = await _generate_structured_content(
+                    client,
+                    disconnect_checker=disconnect_checker,
+                    **get_generate_kwargs(
+                        model=model,
+                        messages=working_messages,
+                        response_format=response_format,
+                    ),
+                )
+            except Exception as exc:
+                # llmai parses before returning content and wraps JSON errors.
+                cause = getattr(exc, "cause", None)
+                if not isinstance(exc, json.JSONDecodeError) and not isinstance(cause, json.JSONDecodeError):
+                    raise
+                if attempt == 2:
+                    raise
+                content = None
             if content is not None:
                 break
             if attempt < 2:
