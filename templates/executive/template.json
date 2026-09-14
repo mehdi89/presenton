@@ -2541,7 +2541,7 @@
                 "size": 55.99,
                 "family": "Anton",
                 "color": "#000000",
-                "bold": true,
+                "bold": false,
                 "line_height": 1.09,
                 "letter_spacing": -0.55
               },
@@ -2556,7 +2556,7 @@
                     "size": 55.99,
                     "family": "Anton",
                     "color": "#000000",
-                    "bold": true,
+                    "bold": false,
                     "line_height": 1.09,
                     "letter_spacing": -0.55
                   }
@@ -10838,11 +10838,11 @@
                 "y": 0
               },
               "size": {
-                "width": 647.0000000000001,
-                "height": 101
+                "width": 360,
+                "height": 54
               },
               "font": {
-                "size": 48,
+                "size": 34,
                 "family": "Anton",
                 "color": "#000000",
                 "line_height": 1.05,
@@ -10856,7 +10856,7 @@
                 {
                   "text": "The chart steady ",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#000000",
                     "bold": false,
@@ -10870,7 +10870,7 @@
                 {
                   "text": "increase in \nthe number of",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "5F4F9B",
                     "bold": false,
@@ -10884,7 +10884,7 @@
                 {
                   "text": " tasks",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#000000",
                     "bold": false,
@@ -10925,10 +10925,10 @@
               },
               "size": {
                 "width": 260,
-                "height": 51
+                "height": 54
               },
               "font": {
-                "size": 48,
+                "size": 34,
                 "family": "Anton",
                 "color": "#5F4F9B",
                 "line_height": 1.05,
@@ -10942,7 +10942,7 @@
                 {
                   "text": " ",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#5F4F9B",
                     "line_height": 1.05,
@@ -10978,11 +10978,11 @@
                 "y": 0
               },
               "size": {
-                "width": 330,
-                "height": 112
+                "width": 360,
+                "height": 54
               },
               "font": {
-                "size": 48,
+                "size": 34,
                 "family": "Anton",
                 "color": "#5F4F9B",
                 "line_height": 1.05,
@@ -10996,7 +10996,7 @@
                 {
                   "text": " ",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#5F4F9B",
                     "line_height": 1.05,
@@ -11021,7 +11021,7 @@
           "id": "title_and_summary_part_4",
           "description": "Ungrouped component element",
           "position": {
-            "x": 375,
+            "x": 435,
             "y": 113
           },
           "elements": [
@@ -11032,12 +11032,12 @@
                 "y": 0
               },
               "size": {
-                "width": 297.78,
-                "height": 112
+                "width": 260,
+                "height": 54
               },
               "rotation": 0,
               "font": {
-                "size": 48,
+                "size": 34,
                 "family": "Anton",
                 "color": "#000000",
                 "line_height": 1.05,
@@ -11051,7 +11051,7 @@
                 {
                   "text": " ",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#000000",
                     "bold": false,
@@ -21365,11 +21365,11 @@
                 "y": 0
               },
               "size": {
-                "width": 647.0000000000001,
-                "height": 101
+                "width": 360,
+                "height": 54
               },
               "font": {
-                "size": 48,
+                "size": 34,
                 "family": "Anton",
                 "color": "#000000",
                 "line_height": 1.05,
@@ -21383,7 +21383,7 @@
                 {
                   "text": "The chart steady ",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#000000",
                     "bold": false,
@@ -21397,7 +21397,7 @@
                 {
                   "text": "increase in \nthe number of",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "5F4F9B",
                     "bold": false,
@@ -21411,7 +21411,7 @@
                 {
                   "text": " tasks",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#000000",
                     "bold": false,
@@ -21446,10 +21446,10 @@
               },
               "size": {
                 "width": 260,
-                "height": 51
+                "height": 54
               },
               "font": {
-                "size": 48,
+                "size": 34,
                 "family": "Anton",
                 "color": "#5F4F9B",
                 "line_height": 1.05,
@@ -21463,7 +21463,7 @@
                 {
                   "text": " ",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#5F4F9B",
                     "line_height": 1.05,
@@ -21493,11 +21493,11 @@
                 "y": 0
               },
               "size": {
-                "width": 330,
-                "height": 112
+                "width": 360,
+                "height": 54
               },
               "font": {
-                "size": 48,
+                "size": 34,
                 "family": "Anton",
                 "color": "#5F4F9B",
                 "line_height": 1.05,
@@ -21511,7 +21511,7 @@
                 {
                   "text": " ",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#5F4F9B",
                     "line_height": 1.05,
@@ -21530,7 +21530,7 @@
           "id": "title_and_summary_part_4",
           "description": "Ungrouped component element",
           "position": {
-            "x": 375,
+            "x": 435,
             "y": 113
           },
           "elements": [
@@ -21541,12 +21541,12 @@
                 "y": 0
               },
               "size": {
-                "width": 297.78,
-                "height": 112
+                "width": 260,
+                "height": 54
               },
               "rotation": 0,
               "font": {
-                "size": 48,
+                "size": 34,
                 "family": "Anton",
                 "color": "#000000",
                 "line_height": 1.05,
@@ -21560,7 +21560,7 @@
                 {
                   "text": " ",
                   "font": {
-                    "size": 48,
+                    "size": 34,
                     "family": "Anton",
                     "color": "#000000",
                     "bold": false,
@@ -23206,7 +23206,7 @@
                 "size": 55.99,
                 "family": "Anton",
                 "color": "#000000",
-                "bold": true,
+                "bold": false,
                 "line_height": 1.09,
                 "letter_spacing": -0.55
               },
@@ -23221,7 +23221,7 @@
                     "size": 55.99,
                     "family": "Anton",
                     "color": "#000000",
-                    "bold": true,
+                    "bold": false,
                     "line_height": 1.09,
                     "letter_spacing": -0.55
                   }
