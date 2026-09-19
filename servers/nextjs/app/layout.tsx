@@ -80,7 +80,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="preload" href="/Presenton_Splash.png" as="image" />
+        <link rel="preload" href="/tubeonai-logo-white.svg" as="image" />
       </head>
       <body
         className={`${inter.variable} ${syne.variable} ${manrope.variable} ${unbounded.variable} antialiased`}

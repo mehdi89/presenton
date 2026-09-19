@@ -116,8 +116,8 @@ function StudioTopBar({ activeStep }: { activeStep: StudioStep }) {
           aria-label="Dashboard"
         >
           <img
-            src="/logo-with-bg.png"
-            alt="Presenton"
+            src="/tubeonai-logo.svg"
+            alt="TubeOnAI"
             className="h-full w-full"
             draggable={false}
           />
